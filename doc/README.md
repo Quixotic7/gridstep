@@ -111,13 +111,27 @@ Here you can save or load your project, create a new project or kill all the not
 
 ## grid shift
 
+![](img/grid_shift.png)
+
 ## grid cut / copy / paste
+
+![](img/grid_cut.png)
+
+![](img/grid_copy.png)
+
+![](img/grid_paste.png)
 
 ## grid play
 
 ![](img/grid_play.png)
 
 The grid starts in this mode. Rows 1 - 7 act as a isomorphic keyboard. The highlighted keys represents the root note. 
+
+## grid clip launch
+
+## grid sequencer
+
+
 
 
 
