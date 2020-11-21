@@ -29,7 +29,7 @@ gridstep is a polyphonic, isomorphic grid keyboard sequencer for monome norns + 
 
 ## doc
 
-documentation for gridstep can be found [here](doc\README.md).
+documentation for gridstep can be found [here](doc/README.md).
 
 
 
