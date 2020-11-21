@@ -47,31 +47,31 @@ The page header shows the currently selected track and pattern on the left and t
 
 ## scale page
 
-![](img\page_scale.png)
+![](img/page_scale.png)
 
 This page allows you to change the scale and root note for the project. You can also change the grid layout mode for the current track. Scale and root changes affect the entire project. Grid layout mode changes only affect the current track. The grid layout mode can be either chromatic or in-scale. If the layout mode is chromatic, changing the root and scale will not change the notes that are output so it is a good mode to use when sequencing drums. 
 
 ## sound page
 
-![](img\page_sound.png)
+![](img/page_sound.png)
 
 The sound page allows you to change the sound of the internal Molly The Polly sound engine. Select a parameter using ENC2 then use K3 to generate a random lead, pad, or percussive sound.
 
 ## page clock
 
-![](img\page_clock.png)
+![](img/page_clock.png)
 
 The clock page lets you can the midi sync source and the BPM. 
 
 ## page track
 
-![](img\page_track.png)
+![](img/page_track.png)
 
 The track page allows you to change settings about the current track. The most useful parameters are "Sound Source", "Midi Channel", and "Midi Device". The other parameters can easily be changed using the grid. 
 
 ## page trig
 
-![](img\page_trig.png)
+![](img/page_trig.png)
 
 This page will temporarily pop up when holding a step but can also be set to always be active. Here you can change the currently selected step's trig condition, velocity, length, and time offset. 
 
@@ -79,7 +79,7 @@ This page will temporarily pop up when holding a step but can also be set to alw
 
 ## page step time
 
-![](img\page_step_time.png)
+![](img/page_step_time.png)
 
 This page will allow you to change the currently selected step's time offset in 1/128T intervals. If the value is fully right it will be offset by 1/16th and play on the next step. If the value is half way it will be offset by 1/32. 
 
@@ -89,7 +89,7 @@ Press K3 to change the pattern's offset mode to triplets. In triplet mode each s
 
 ## page save / load
 
-![](img\page_save_load.png)
+![](img/page_save_load.png)
 
 Here you can save or load your project, create a new project or kill all the notes if shit goes south. Creating a new project will clear everything and stop playback. Loading a project can be done without stopping playback. 
 
@@ -99,15 +99,15 @@ Here you can save or load your project, create a new project or kill all the not
 
 **in scale mode**
 
-![](img\grid_scale.png)
+![](img/grid_scale.png)
 
 **chromatic mode**
 
-![](img\grid_chromatic.png)
+![](img/grid_chromatic.png)
 
 ## grid toolbar
 
-![](img\grid_toolbar.png)
+![](img/grid_toolbar.png)
 
 ## grid shift
 
@@ -115,7 +115,7 @@ Here you can save or load your project, create a new project or kill all the not
 
 ## grid play
 
-![](img\grid_play.png)
+![](img/grid_play.png)
 
 The grid starts in this mode. Rows 1 - 7 act as a isomorphic keyboard. The highlighted keys represents the root note. 
 
