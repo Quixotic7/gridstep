@@ -41,7 +41,7 @@ The UI pages share a common interface.
 | K2      | back or hold for shift                                       |
 | K3      | click on the currently selected parameter. if no value is shown for a parameter it can probably be clicked |
 
-![](img\page_header.png)
+![](img/page_header.png)
 
 The page header shows the currently selected track and pattern on the left and the BPM on the right. 
 
