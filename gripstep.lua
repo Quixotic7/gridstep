@@ -1,11 +1,7 @@
--- Layout
--- 4ths
--- 3rds
--- sequent - vertical/horiztonal
--- inkey chromatic
--- Fixed - weather or not root changes position
-
--- local MLY = require "molly_the_poly/lib"
+-- gridstep
+--
+-- a polyphonic, isomorphic 
+-- grid keyboard sequencer
 local MollyThePoly = require "molly_the_poly/lib/molly_the_poly_engine"
 engine.name = "MollyThePoly"
 
