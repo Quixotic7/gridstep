@@ -1,6 +1,8 @@
 # gridstep
 **gridstep** is a polyphonic, isomorphic grid keyboard sequencer for monome norns + grid. 
 
+![](doc/img/page_trig.png)
+
 ![](doc/img/grid_step_edit.png)
 
 ### requirements:
