@@ -26,7 +26,7 @@ local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.0.0"
+local version_number = "1.0.1"
 
 local g = grid.connect()
 -- local gridKeys = Q7GridKeys.new(16,8)

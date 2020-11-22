@@ -301,36 +301,53 @@ function Q7GridSeq:get_length()
 end
 
 function Q7GridSeq:set_length(bar_length, num_bars)
-    -- local pat = self:get_selected_pattern()
-    -- if pat == nil then return false end
-
     if bar_length < 1 or bar_length > 16 or num_bars < 1 or num_bars > 16 then return false end
     -- local prev_num_bars = self.num_bars
 
-    self.bar_length = bar_length
-    self.num_bars = num_bars
+    local pat = self:get_selected_pattern()
+    if pat == nil then 
+        print("Pattern is nil")
+        return false 
+    end
+
+    -- self.bar_length = bar_length
+    -- self.num_bars = num_bars
     -- self.total_step_count = self.bar_length * 4 * self.num_bars
 
     -- more bars are needed
-    if num_bars > #self.bars then
-        for i = #self.bars + 1, num_bars do
-            self.bars[i] = self:create_new_bar()
+    if num_bars > pat.num_bars then
+        for i = pat.num_bars + 1, num_bars do
+            if pat.bars[i] == nil then -- create new bar as neccessarily, thus existing bars stay alive
+                pat.bars[i] = self:create_new_bar()
+            end
         end
     end
 
-    if Q7GridSeq.stepIndex_to_stepId(self.current_step) > self.bar_length then
-        self:change_selected_stepId(self.bar_length)
+    if Q7GridSeq.stepIndex_to_stepId(self.current_step) > pat.bar_length then
+        self:change_selected_stepId(pat.bar_length)
     end
 
-    if self.selected_bar > self.num_bars then
-        self:change_selected_bar(self.num_bars)
+
+    if self.selected_bar >= pat.num_bars then
+        self.selected_bar = pat.num_bars
     end
 
-    local pat = self:get_selected_pattern()
-    if pat ~= nil then 
-        pat.bar_length = self.bar_length
-        pat.num_bars = self.num_bars
-    end
+    self.bars = pat.bars
+
+    pat.bar_length = bar_length
+    pat.num_bars = num_bars
+
+    self.bar_length = bar_length
+    self.num_bars = num_bars
+    self.total_step_count = self.bar_length * 4 * self.num_bars
+
+    self:change_selected_bar(self.selected_bar)
+
+    -- local pat = self:get_selected_pattern()
+    -- if pat ~= nil then 
+    --     pat.bar_length = self.bar_length
+    --     pat.num_bars = self.num_bars
+    -- end
 
     return true
     -- should I clear existing bars if the bar length becomes shorter?
@@ -1520,7 +1537,7 @@ end
 
 function Q7GridSeq:does_bar_have_notes_internal(bar)
     if bar == nil then return false end
-    
+
     for i = 1, 16 do
         if self:does_step_have_notes_internal(bar[i]) then
             return true
