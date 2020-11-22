@@ -1,18 +1,16 @@
 # gridstep
-gridstep is a polyphonic, isomorphic grid keyboard sequencer for monome norns + grid. 
+**gridstep** is a polyphonic, isomorphic grid keyboard sequencer for monome norns + grid. 
 
-**Requirements:**
+### requirements:
 
 * **norns**
 * **grid** - note input and sequencing
 
-**Optional:**
+### optional:
 
 * **external midi devices** - for getting more sounds than just Molly The Poly
 
-
-
-## features
+### features
 
 * The grid can be played in an isomorphic layout that is either chromatic or in-scale. 
 * It can sequence up to 16 tracks. 
