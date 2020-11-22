@@ -33,6 +33,12 @@
 
 documentation for **gridstep** can be found [here](doc/README.md).
 
+### changelog
+
+**v1.0.1** - fixed bug that could occur when changing the number of bars in a pattern.
+
+**v1.0.1** - initial release
+
 
 
 
