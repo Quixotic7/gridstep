@@ -1519,6 +1519,8 @@ function Q7GridSeq:does_step_have_notes_internal(step)
 end
 
 function Q7GridSeq:does_bar_have_notes_internal(bar)
+    if bar == nil then return false end
+    
     for i = 1, 16 do
         if self:does_step_have_notes_internal(bar[i]) then
             return true
