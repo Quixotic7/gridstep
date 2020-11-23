@@ -5,12 +5,12 @@
 
 ![](doc/img/grid_step_edit.png)
 
-### requirements:
+### requirements
 
 * **norns**
-* **grid** - note input and sequencing
+* **grid 128 or 64** - note input and sequencing
 
-### optional:
+### optional
 
 * **external midi devices** - for getting more sounds than just Molly The Poly
 
