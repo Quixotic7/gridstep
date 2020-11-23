@@ -35,6 +35,8 @@ documentation for **gridstep** can be found [here](doc/README.md).
 
 ### changelog
 
+**v1.1.1** - bug fix to prevent too many of the same note from triggering at once which can crash Molly The Poly
+
 **v1.1.0** - Added support for 64 / 8x8 grids. 
 
 - works mostly the same as for 128 grids. 

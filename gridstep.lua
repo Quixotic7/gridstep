@@ -26,7 +26,7 @@ local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.1.0"
+local version_number = "1.1.1"
 
 local g = grid.connect()
 
@@ -46,6 +46,9 @@ local midi_4 = midi.connect(4)
 local midi_devices = {midi_1, midi_2, midi_3, midi_4}
 
 local active_midi_notes = {}
+
+local active_internal_notes = {}
+
 
 local SoundModes = {"Internal", "External"}
 
@@ -495,6 +498,7 @@ function clock.transport.start()
     -- print("we begin")
     -- position = 16
     -- id = clock.run(count)
+    active_internal_notes = {}
 
     for i,seq in pairs(all_gridSeqs) do
         seq:play_start()
@@ -502,7 +506,7 @@ function clock.transport.start()
 
     if not is_playing then
         is_playing = true
-        -- play_clock_id = clock.run(play_sequence)
+        play_clock_id = clock.run(play_sequence)
     end
 end
   
@@ -515,8 +519,9 @@ function clock.transport.stop()
     
 
     if is_playing then
-        -- clock.cancel(play_clock_id)
+        clock.cancel(play_clock_id)
         is_playing = false
+        engine.noteOffAll()
     end
 end
 
@@ -543,13 +548,20 @@ function play_sequence()
     while is_playing do
         -- print("beats: " .. clock.get_beats())
 
+        -- self:clock_step16()
+
         for i,seq in pairs(all_gridSeqs) do
-            seq:clock_step()
+            seq:clock_step16()
         end
 
-        grid_redraw()
+        active_internal_notes = {} -- prevents notes from playing on top of each other in a step
 
-        clock.sync(1/16)
+        -- clock.sync(1/24) -- 6 substeps
+        clock.sync(1/48) -- 12 substeps
+
+        -- grid_redraw()
+
+        -- clock.sync(1/16)
     end
 end
 
@@ -733,7 +745,23 @@ function grid_note_on(gKeys, noteNum, vel)
     -- print("Note On: " .. noteNum.. " " .. vel .. " " .. music.note_num_to_name(noteNum))
 
     if gKeys.sound_mode == 1 then
-        engine.noteOn(noteNum, music.note_num_to_freq(noteNum), vel / 127)
+
+        if active_internal_notes[noteNum] == nil then -- prevent the same note from playing on top of itself
+            local n = {}
+            n.noteNum = noteNum
+            n.vel = vel
+            n.channel = gKeys.midi_channel
+
+            active_internal_notes[noteNum] = n
+
+            engine.noteOn(noteNum, music.note_num_to_freq(noteNum), vel / 127)
+        end
+
+        -- if is_playing then
+            
+        -- else
+        --     engine.noteOn(noteNum, music.note_num_to_freq(noteNum), vel / 127)
+        -- end
     elseif gKeys.sound_mode == 2 then -- midi out
         local m = midi_devices[gKeys.midi_device]
 
@@ -754,6 +782,9 @@ function grid_note_off(gKeys, noteNum)
     -- print("Note Off: " .. noteNum .. " " .. music.note_num_to_name(noteNum))
 
     if gKeys.sound_mode == 1 then
+        -- if active_internal_notes[noteNum] ~= nil then -- prevent the same note from playing on top of itself
+        --     active_internal_notes[noteNum] = nil
+        -- end
         engine.noteOff(noteNum)
     elseif gKeys.sound_mode == 2 then
         local m = midi_devices[gKeys.midi_device]
@@ -767,6 +798,8 @@ function grid_note_off(gKeys, noteNum)
 end
 
 function all_midi_notes_off(deviceId)
+    -- active_internal_notes = {}
+
     if deviceId == nil then
         for d = 1,4 do
             local m = midi_devices[d]
