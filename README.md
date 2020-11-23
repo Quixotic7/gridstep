@@ -35,6 +35,16 @@ documentation for **gridstep** can be found [here](doc/README.md).
 
 ### changelog
 
+**v1.1.0** - Added support for 64 / 8x8 grids. 
+
+- works mostly the same as for 128 grids. 
+- in 64 grid mode, keys 7 and 8 on the toolbar(y = 8) can be used to select steps 1-8 or steps 9-16 for editing. 
+- use key 3 to round robin through the grid pages: play, pattern launch, sequence. 
+- cut, copy, and paste have been moved to keys 4,5,6
+- in grid play and grid sequence keys 7 and 8 on row 7 can be used to scroll up and down
+- in grid pattern launch mode use shift + 5 and 6 to scroll the pattern view up and down. 
+- All the shortcuts for the 128 mode are unchanged. 
+
 **v1.0.1** - fixed bug that could occur when changing the number of bars in a pattern.
 
 **v1.0.1** - initial release

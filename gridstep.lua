@@ -2353,9 +2353,9 @@ function grid_draw_toolbar()
      -- g:led(2,toolY,gridKeys.layout_mode == 1 and mode_on_brightness or mode_off_brightness)
 
      if gridType == gridType_128 then
-        g:led(3,toolY, mode_on_brightness) -- play mode active
-        g:led(4,toolY, mode_off_brightness) -- pat launch mode not active
-        g:led(5,toolY, mode_off_brightness) -- step mode not active
+        g:led(3,toolY, config.grid_page_index == 1 and mode_on_brightness or mode_off_brightness) -- play mode active
+        g:led(4,toolY, config.grid_page_index == 2 and mode_on_brightness or mode_off_brightness) -- pat launch mode not active
+        g:led(5,toolY, config.grid_page_index == 3 and mode_on_brightness or mode_off_brightness) -- step mode not active
      elseif gridType == gridType_64 then
         g:led(3,toolY, mode_on_brightness)
 
