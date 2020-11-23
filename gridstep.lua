@@ -26,10 +26,15 @@ local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.0.1"
+local version_number = "1.1.0"
 
 local g = grid.connect()
--- local gridKeys = Q7GridKeys.new(16,8)
+
+local gridType_none = 0
+local gridType_128 = 1
+local gridType_64 = 2
+local gridType = 1
+
 local gridKeys = {}
 local gridSeq = {} 
 
@@ -75,12 +80,6 @@ local project_name = ""
 local fileselect_active = false
 local textentry_active = false
 
--- local PageBase = {}
-
--- function PageBase.Init()
---     print("Init not implemented")
--- end
-
 local PageTest = {}
 local PageScale = {}
 local PageSound = {}
@@ -92,11 +91,6 @@ local PageQ7 = {}
 local PageTrig = {} -- shown when step key is held
 local PageMicroTiming = {}
 local showTrigPage = false
-
--- setmetatable(PageScale, PageBase)
--- setmetatable(PageTrack, PageBase)
--- setmetatable(PageClock, PageBase)
--- setmetatable(PageQ7, PageBase)
 
 local current_page = {}
 
@@ -113,12 +107,13 @@ local GridPatLaunch = {}
 
 local current_grid_page = {}
 
-local grid_pages = {GridPlay, GridSeq, GridSeqVel, GridSeqNoteLengths, GridPatLaunch}
+local grid_pages = {GridPlay, GridPatLaunch, GridSeq, GridSeqVel, GridSeqNoteLengths}
+local grid_page_names = {"GridPlay", "GridPatLaunch", "GridSeq", "GridSeqVel", "GridSeqNoteLengths"}
+
 
 local gridSeqConfig = {
     step_counter = {}
 }
-
 local patLaunchConfig = {
     edit_mode = 1,
     clipboard_pattern = nil,
@@ -132,6 +127,7 @@ local whiteKeys = {1,0,1,0,1,1,0,1,0,1,0,1}
 local pattern_num_to_letter = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"}
 
 local held_step = 0
+local grid_dirty = false
 
 GridPatLaunch.edit_mode = seqmode_select
 GridPatLaunch.clipboard_pattern = nil
@@ -155,6 +151,8 @@ local shift_down = false
 local track = 1
 
 local is_playing = false
+
+local edit_steps_9_16 = false -- for 64x64 grids
 
 local blink_on = false -- used to blink keys
 local blink_fade = 1
@@ -194,7 +192,18 @@ local notification_text = "none"
 
 -- init
 function init()
-    -- gridKeys = Q7GridKeys.new(16,8)
+    if g.cols == 16 and g.rows == 8 then
+        print("grid 128 detected")
+        gridType = gridType_128
+    elseif g.cols == 8 and g.rows == 8 then
+        print("grid 64 detected")
+        gridType = gridType_64
+    else
+        gridType = gridType_none
+    end
+
+    -- gridType = gridType_64 -- uncomment to fake 8x8 grid
+
 
     current_page = pages[config.page_index]
     current_grid_page = grid_pages[config.grid_page_index]
@@ -277,6 +286,7 @@ function init()
     end
 
     PageTrig.init()
+    change_grid_page("GridPlay")
 
     -- if current_page.init ~= nil then current_page.init() end
 
@@ -397,6 +407,8 @@ function create_new_project()
     end
 
     PageTrig.init()
+    change_grid_page("GridPlay")
+
     grid_redraw()
 
     show_temporary_notification("New Project Created")
@@ -591,7 +603,7 @@ function change_gridKey_layout()
     show_temporary_notification("Grid Layout = "..Q7GridKeys.layout_names[gridKeys.layout_mode])
 end
 
-function change_grid_mode(newMode)
+function change_grid_page(newMode)
     showTrigPage = false -- hide trig page
 
     held_step = 0
@@ -601,26 +613,18 @@ function change_grid_mode(newMode)
         config.grid_page_index = 1
         current_grid_page = grid_pages[config.grid_page_index]
         gridSeq.step_edit = false
-        gridKeys:resize_grid(1,1,16,7)
+        if gridType == gridType_64 then
+            gridKeys:resize_grid(1,1,8,7)
+        else
+            gridKeys:resize_grid(1,1,16,7)
+        end
         gridSeq:clear_step_edit()
         gridSeq.edit_mode = seqmode_select
         gridKeys.enable_key_playback = true
 
         show_temporary_notification("Grid Play")
-    elseif newMode == "GridSeq" then
-        config.grid_page_index = 2
-        current_grid_page = grid_pages[config.grid_page_index]
-        gridSeq.step_edit = true
-        gridKeys:resize_grid(1,2,14,6)
-        gridSeq:select_step(gridSeq.current_step)
-
-        if gridSeq.is_playing then
-            gridKeys.enable_key_playback = false
-        end
-
-        show_temporary_notification("Edit Seq")
     elseif newMode == "GridPatLaunch" then
-        config.grid_page_index = 5
+        config.grid_page_index = 2
         current_grid_page = grid_pages[config.grid_page_index]
         gridSeq.step_edit = false
         -- gridKeys:resize_grid(1,2,14,6)
@@ -629,8 +633,25 @@ function change_grid_mode(newMode)
         gridKeys.enable_key_playback = false
         gridSeq:select_step(gridSeq.current_step)
         show_temporary_notification("Patern Launch")
-    elseif newMode == "GridSeqVel" then
+    elseif newMode == "GridSeq" then
         config.grid_page_index = 3
+        current_grid_page = grid_pages[config.grid_page_index]
+        gridSeq.step_edit = true
+        if gridType == gridType_64 then
+            gridKeys:resize_grid(1,2,8,6)
+        else
+            gridKeys:resize_grid(1,2,14,6)
+        end
+        
+        gridSeq:select_step(gridSeq.current_step)
+
+        if gridSeq.is_playing then
+            gridKeys.enable_key_playback = false
+        end
+
+        show_temporary_notification("Edit Seq")
+    elseif newMode == "GridSeqVel" then
+        config.grid_page_index = 4
         current_grid_page = grid_pages[config.grid_page_index]
         gridSeq.step_edit = true
         gridSeq:clear_step_edit()
@@ -639,7 +660,7 @@ function change_grid_mode(newMode)
 
         show_temporary_notification("Edit Vel")
     elseif newMode == "GridSeqNoteLengths" then
-        config.grid_page_index = 4
+        config.grid_page_index = 5
         current_grid_page = grid_pages[config.grid_page_index]
         gridSeq.step_edit = true
         gridSeq:clear_step_edit()
@@ -776,17 +797,23 @@ function all_midi_notes_off(deviceId)
 end
 
 g.key = function(x,y,z)
+    grid_dirty = false
     current_grid_page.grid_key(x,y,z)
+
+    if grid_dirty then
+        grid_redraw()
+    end
 end
 
-
-function GridPlay.grid_key(x,y,z)
-    local grid_dirty = false
-
-    if not shift_down then
-        grid_dirty = gridKeys:grid_key(x,y,z)
+function grid_key_toolbar( x, y, z)
+    if gridType == gridType_128 then
+        grid_key_toolbar_128(x,y,z)
+    elseif gridType == gridType_64 then
+        grid_key_toolbar_64(x,y,z)
     end
+end
 
+function grid_key_toolbar_128( x, y, z)
     if not shift_down then
         if z == 1 then -- key pressed
             if y == 8 then
@@ -797,24 +824,61 @@ function GridPlay.grid_key(x,y,z)
                     shift_down = true
                     show_temporary_notification("Shift")
                     grid_dirty = true
+                elseif x == 3 then -- change to play mode
+                    if config.grid_page_index ~= 1 then
+                        change_grid_page("GridPlay")
+                        grid_dirty = true
+                    end
                 elseif x == 4 then -- change to pat launch mode
-                    change_grid_mode("GridPatLaunch")
-                    grid_dirty = true
+                    if config.grid_page_index ~= 2 then
+                        change_grid_page("GridPatLaunch")
+                        grid_dirty = true
+                    end
                 elseif x == 5 then -- switch to seq edit mode
-                    change_grid_mode("GridSeq")
+                    if config.grid_page_index ~= 3 then
+                        change_grid_page("GridSeq")
+                        grid_dirty = true
+                    end
+                end
+            end
+        else  -- key released
+        end
+    elseif shift_down then -- Shift Mode
+        if z == 1 then -- key pressed
+        else  -- key released
+            if y == 8 then
+                if x == 2 then -- shift
+                    shift_down = false
+                    gridSeq.edit_mode = seqmode_select
                     grid_dirty = true
-                elseif x == 13 then -- change keyboard layout to in-scale
-                    change_gridKey_layout()
+                end
+            end
+        end
+    end
+end
+
+function grid_key_toolbar_64( x, y, z)
+    if not shift_down then
+        if z == 1 then -- key pressed
+            if y == 8 then
+                if x == 1 then -- Toggle playback
+                    toggle_playback()
                     grid_dirty = true
-                elseif x == 14 then -- enable highlighted notes
-                    gridKeys.enable_note_highlighting = not gridKeys.enable_note_highlighting
-                    show_temporary_notification(gridKeys.enable_note_highlighting and "Show notes" or "Hide notes")
+                elseif x == 2 then -- shift
+                    shift_down = true
+                    show_temporary_notification("Shift")
                     grid_dirty = true
-                elseif x == 15 then -- scroll grid keyboard down
-                    gridKeys:scroll_down()
+                elseif x == 3 then -- change mode
+                    local new_page = (config.grid_page_index % 3) + 1
+                    change_grid_page(grid_page_names[new_page])
                     grid_dirty = true
-                elseif x == 16 then -- scroll grid keyboard up
-                    gridKeys:scroll_up()
+                elseif x == 7 then -- edit steps 1-8
+                    edit_steps_9_16 = false
+                    show_temporary_notification("Edit 1-8")
+                    grid_dirty = true
+                elseif x == 8 then -- edit steps 9-16
+                    edit_steps_9_16 = true
+                    show_temporary_notification("Edit 9-16")
                     grid_dirty = true
                 end
             end
@@ -822,42 +886,175 @@ function GridPlay.grid_key(x,y,z)
         end
     elseif shift_down then -- Shift Mode
         if z == 1 then -- key pressed
-            if y == 1 then -- mute step
-                if gridSeq:set_stepId_mute(x) then
-                    show_temporary_notification("Mute: "..x.." "..(gridSeq:get_stepId_mute(x) and "true" or "false" ))
+            if y == 8 then
+                if x == 7 then -- edit steps 1-8
+                    edit_steps_9_16 = false
+                    show_temporary_notification("Edit 1-8")
+                    grid_dirty = true
+                elseif x == 8 then -- edit steps 9-16
+                    edit_steps_9_16 = true
+                    show_temporary_notification("Edit 9-16")
                     grid_dirty = true
                 end
-            elseif y == 2 then -- change bar length
-                gridSeq:set_length(x, gridSeq.num_bars)
-                show_temporary_notification("Bar Length: "..gridSeq.bar_length)
-                grid_dirty = true
-            elseif y == 3 then -- change number of bars
-                gridSeq:set_length(gridSeq.bar_length, x)
-                show_temporary_notification("Bar Count: "..gridSeq.num_bars)
-                grid_dirty = true
-            elseif y == 4 then -- select bar
-                if gridSeq:change_selected_bar(x) then
-                    show_temporary_notification("Bar: "..gridSeq.selected_bar)
+            end
+        else  -- key released
+            if y == 8 then
+                if x == 2 then -- shift
+                    shift_down = false
+                    gridSeq.edit_mode = seqmode_select
+                    grid_dirty = true
                 end
+            end
+        end
+    end
+end
+
+function grid_key_shift( x, y, z)
+    if shift_down then
+        if gridType == gridType_128 then
+            grid_key_shift_128(x,y,z)
+        elseif gridType == gridType_64 then
+            grid_key_shift_64(x,y,z)
+        end
+    end
+end
+
+function grid_key_shift_128( x, y, z)
+    if z == 1 then -- key pressed Shift Mode
+        if y == 1 then -- mute step
+            if gridSeq:set_stepId_mute(x) then
+                show_temporary_notification("Mute: "..x.." "..(gridSeq:get_stepId_mute(x) and "true" or "false" ))
                 grid_dirty = true
-            elseif y == 5 then -- select pattern
-                if gridSeq:change_selected_pattern(x) then
-                    show_temporary_notification("Pattern: "..get_pattern_letter())
+            end
+        elseif y == 2 then -- change bar length
+            gridSeq:set_length(x, gridSeq.num_bars)
+            show_temporary_notification("Bar Length: "..gridSeq.bar_length)
+            grid_dirty = true
+        elseif y == 3 then -- change number of bars
+            gridSeq:set_length(gridSeq.bar_length, x)
+            show_temporary_notification("Bar Count: "..gridSeq.num_bars)
+            grid_dirty = true
+        elseif y == 4 then -- select bar
+            if gridSeq:change_selected_bar(x) then
+                show_temporary_notification("Bar: "..gridSeq.selected_bar)
+            end
+            grid_dirty = true
+        elseif y == 5 then -- select pattern
+            if gridSeq:change_selected_pattern(x) then
+                show_temporary_notification("Pattern: "..get_pattern_letter())
+            end
+            grid_dirty = true
+        elseif y == 7 then -- change track
+            change_track(x)
+            show_temporary_notification("Track: "..track)
+            grid_dirty = true
+        end
+    else -- key released Shift Mode
+    end
+end
+
+function grid_key_shift_64(x,y,z)
+
+    local xOff = edit_steps_9_16 and 8 or 0
+    x = x + xOff
+
+    if z == 1 then -- key pressed Shift Mode
+        if y == 1 then -- mute step
+            if gridSeq:set_stepId_mute(x) then
+                show_temporary_notification("Mute: "..x.." "..(gridSeq:get_stepId_mute(x) and "true" or "false" ))
+                grid_dirty = true
+            end
+        elseif y == 2 then -- change bar length
+            gridSeq:set_length(x, gridSeq.num_bars)
+            show_temporary_notification("Bar Length: "..gridSeq.bar_length)
+            grid_dirty = true
+        elseif y == 3 then -- change number of bars
+            gridSeq:set_length(gridSeq.bar_length, x)
+            show_temporary_notification("Bar Count: "..gridSeq.num_bars)
+            grid_dirty = true
+        elseif y == 4 then -- select bar
+            if gridSeq:change_selected_bar(x) then
+                show_temporary_notification("Bar: "..gridSeq.selected_bar)
+            end
+            grid_dirty = true
+        elseif y == 5 then -- select pattern
+            if gridSeq:change_selected_pattern(x) then
+                show_temporary_notification("Pattern: "..get_pattern_letter())
+            end
+            grid_dirty = true
+        elseif y == 7 then -- change track
+            change_track(x)
+            show_temporary_notification("Track: "..track)
+            grid_dirty = true
+        end
+    else -- key released Shift Mode
+    end
+end
+
+
+function GridPlay.grid_key(x,y,z)
+    if not shift_down then
+        if gridType == gridType_128 then
+            grid_dirty = gridKeys:grid_key(x,y,z)
+        elseif gridType == gridType_64 then
+            if (y == 7 and x == 7) or (y == 7 and x == 8) then
+            else
+                grid_dirty = gridKeys:grid_key(x,y,z)
+            end
+        end
+    end
+
+    if not shift_down then
+        if z == 1 then -- key pressed
+            if gridType == gridType_128 then
+                if y == 8 then
+                    if x == 13 then -- change keyboard layout to in-scale
+                        change_gridKey_layout()
+                        grid_dirty = true
+                    elseif x == 14 then -- enable highlighted notes
+                        gridKeys.enable_note_highlighting = not gridKeys.enable_note_highlighting
+                        show_temporary_notification(gridKeys.enable_note_highlighting and "Show notes" or "Hide notes")
+                        grid_dirty = true
+                    elseif x == 15 then -- scroll grid keyboard down
+                        gridKeys:scroll_down()
+                        grid_dirty = true
+                    elseif x == 16 then -- scroll grid keyboard up
+                        gridKeys:scroll_up()
+                        grid_dirty = true
+                    end
                 end
-                grid_dirty = true
-            elseif y == 7 then -- change track
-                change_track(x)
-                show_temporary_notification("Track: "..track)
-                grid_dirty = true
-            elseif y == 8 then -- Tool bar
+            elseif gridType == gridType_64 then
+                if y == 7 then
+                    if x == 7 then -- scroll grid keyboard down
+                        gridKeys:scroll_down()
+                        grid_dirty = true
+                    elseif x == 8 then -- scroll grid keyboard up
+                        gridKeys:scroll_up()
+                        grid_dirty = true
+                    end
+                elseif y == 8 then
+                    if x == 5 then -- change keyboard layout to in-scale
+                        change_gridKey_layout()
+                        grid_dirty = true
+                    elseif x == 6 then -- enable highlighted notes
+                        gridKeys.enable_note_highlighting = not gridKeys.enable_note_highlighting
+                        show_temporary_notification(gridKeys.enable_note_highlighting and "Show notes" or "Hide notes")
+                        grid_dirty = true
+                    end
+                end
+            end
+        else  -- key released
+        end
+    elseif shift_down then -- Shift Mode
+        if z == 1 then -- key pressed
+            if y == 8 then -- Tool bar
                 if confirm_delete and x ~= 5 then
                     confirm_delete = false
                     clear_notification()
                 end
-                
+
                 if x == 1 then
                     gridSeq:set_record_state(not gridSeq.record)
-
                     show_temporary_notification("Record "..(gridSeq.record and "Enabled" or "Disabled"))
                     grid_dirty = true
                 elseif x == 5 then -- clear sequence
@@ -872,29 +1069,14 @@ function GridPlay.grid_key(x,y,z)
                         show_notification("Clear Pattern?")
                     end
                     grid_dirty = true
-                elseif x == 13 then -- shift notes left
-                    show_temporary_notification("Shift Left")
-                    gridSeq:shift_notes_left()
-                    grid_dirty = true
-                elseif x == 14 then -- shift notes right
-                    show_temporary_notification("Shift Right")
-                    gridSeq:shift_notes_right()
-                    grid_dirty = true
-                elseif x == 15 then -- prev bar
-                    gridSeq:select_prev_bar()
-                    show_temporary_notification("Bar " ..gridSeq.selected_bar)
-                    grid_dirty = true
-                elseif x == 16 then -- next bar
-                    gridSeq:select_next_bar()
-                    show_temporary_notification("Bar " ..gridSeq.selected_bar)
-                    grid_dirty = true
                 end
             end
         else  -- key released
             if y == 8 then
                 if x == 2 then -- shift
-                    shift_down = false
-                    gridSeq.edit_mode = seqmode_select
+                    -- shift_down = false
+                    -- gridSeq.edit_mode = seqmode_select
+
                     confirm_delete = false
                     clear_notification()
                     grid_dirty = true
@@ -903,109 +1085,8 @@ function GridPlay.grid_key(x,y,z)
         end
     end
 
-    -- old
-        -- if z == 1 then
-        --     -- if x == 1 and y >= 1 and y <= 7 then -- Change velocity with left bar
-        --     --     local vel = 7 - y
-
-        --     --     config.note_velocity = util.round(util.linlin(0,6,0,127,vel))
-        --     --     gridKeys.note_velocity = config.note_velocity
-
-        --     --     print("Velocity: " .. config.note_velocity)
-        --     --     grid_dirty = true;
-        --     if y == 8 and shift_down == false then 
-        --         if x == 1 then -- Toggle playback
-        --             toggle_playback()
-        --             grid_dirty = true
-        --         elseif x == 2 then -- Record
-        --             gridSeq:set_record_state(not gridSeq.record)
-        --             grid_dirty = true
-        --             -- gridKeys.layout_mode = 1
-        --             -- engine.noteOffAll() -- layout change can cause notes to keep ringing
-        --             -- grid_dirty = true
-                
-        --         elseif x == 5 then -- switch to seq edit mode
-        --             change_grid_mode("GridSeq")
-        --             -- config.grid_page_index = 2
-        --             -- current_grid_page = grid_pages[config.grid_page_index]
-        --             -- gridSeq.step_edit = true
-        --             -- gridKeys:resize_grid(1,2,14,6)
-        --             -- gridSeq:select_step(gridSeq.current_step)
-
-        --             -- if gridSeq.is_playing then
-        --             --     gridKeys.enable_key_playback = false
-        --             -- end
-
-        --             grid_dirty = true
-        --         elseif x == 7 then -- shift
-        --             shift_down = true;
-        --             show_temporary_notification("Shift")
-        --             -- gridSeq.edit_mode = seqmode_delete 
-        --             grid_dirty = true
-        --         elseif x == 13 then -- change keyboard layout to in-scale
-        --             if gridKeys.layout_mode == 1 then
-        --                 gridKeys.layout_mode = 2
-        --                 show_temporary_notification("Scale Grid")
-        --             else
-        --                 gridKeys.layout_mode = 1
-        --                 show_temporary_notification("Chromatic Grid")
-        --             end
-                    
-        --             engine.noteOffAll() -- layout change can cause notes to keep ringing
-        --             grid_dirty = true
-        --         elseif x == 14 then -- enable highlighted notes
-        --             gridKeys.enable_note_highlighting = not gridKeys.enable_note_highlighting
-
-        --             show_temporary_notification(gridKeys.enable_note_highlighting and "Show notes" or "Hide notes")
-
-        --             grid_dirty = true
-                    
-        --         elseif x == 15 then -- scroll grid keyboard down
-        --             gridKeys:scroll_down()
-        --             grid_dirty = true
-        --         elseif x == 16 then -- scroll grid keyboard up
-        --             gridKeys:scroll_up()
-        --             grid_dirty = true
-        --         end
-        --     elseif y == 8 then -- shift key down
-        --         if confirm_delete and x ~= 5 then
-        --             confirm_delete = false
-        --             clear_notification()
-        --             grid_dirty = true
-        --         end
-
-        --         if x == 5 then -- clear sequence
-        --             if confirm_delete then
-        --                 gridSeq:clear_pattern()
-        --                 engine.noteOffAll()
-        --                 confirm_delete = false
-        --                 clear_notification()
-        --                 show_temporary_notification("Pattern cleared.")
-        --             else
-        --                 confirm_delete = true
-        --                 show_notification("Clear Pattern?")
-        --             end
-        --             grid_dirty = true
-        --         end
-        --     end
-        -- else -- key released
-        --     if y == 8 and shift_down == false then
-        --     elseif y == 8 then -- shift release
-        --         if x == 7 then -- shift
-        --             shift_down = false
-        --             confirm_delete = false
-        --             clear_notification()
-        --             -- gridSeq.edit_mode = seqmode_select
-        --             -- gridSeq:clear_edit_mode(seqmode_delete)
-        --             grid_dirty = true
-        --         end
-        --     end
-        -- end
-
-
-    if grid_dirty then
-        grid_redraw()
-    end
+    grid_key_toolbar(x,y,z)
+    grid_key_shift(x,y,z)
 end
 
 -- GridSeq.held_step = 0
@@ -1013,10 +1094,31 @@ end
 GridSeq.show_step_edit = false
 
 function GridSeq.grid_key(x,y,z)
-    local grid_dirty = false
-
     if not GridSeq.show_step_edit and not shift_down and gridSeq.edit_mode == seqmode_select then
-        grid_dirty = gridKeys:grid_key(x,y,z)
+        if gridType == gridType_128 then
+            grid_dirty = gridKeys:grid_key(x,y,z)
+        elseif gridType == gridType_64 then
+            if (y == 7 and x == 7) or (y == 7 and x == 8) then
+            else
+                grid_dirty = gridKeys:grid_key(x,y,z)
+            end
+        end
+    end
+
+    local xOff = 0
+    local xCut = 9
+    local xCopy = 10
+    local xPaste = 11
+    local ignoreToolbar = false -- needed if switching to velocity edit or note edit mode
+
+    if gridType == gridType_64 then
+        xCut = 4
+        xCopy = 5
+        xPaste = 6
+
+        if edit_steps_9_16 then
+            xOff = 8
+        end
     end
 
     if GridSeq.show_step_edit then
@@ -1026,10 +1128,10 @@ function GridSeq.grid_key(x,y,z)
 
         if z == 1 then -- key pressed
             if y == 1 then
-                if x ~= held_step then
+                if x+xOff ~= held_step then
                     gridSeq:copy_step(held_step)
-                    gridSeq:paste_step(x)
-                    show_temporary_notification("Copy Step "..held_step.." to "..x)
+                    gridSeq:paste_step(x+xOff)
+                    show_temporary_notification("Copy Step "..held_step.." to "..(x+xOff))
                     grid_dirty = true;
                 end
             end
@@ -1044,27 +1146,31 @@ function GridSeq.grid_key(x,y,z)
         end
     elseif gridSeq.edit_mode == seqmode_select and not shift_down then
         if z == 1 then -- key pressed
-            if x == 15 and y >= 2 and y <= 7 then -- change velocity
-                local vel = 7 - y
-                local velLevel = util.round(util.linlin(0,5,0,127,vel))
-                gridSeq:change_velocity(velLevel)
-                print("Velocity: " .. velLevel)
-                grid_dirty = true;
-            elseif x == 16 and y >= 2 and y <= 7 then -- change note length
-                local yVal = 7 - y
-                noteLength = seq_noteLengths[8-y]
-                gridSeq:change_noteLength(noteLength)
-                print("NoteLength: " .. noteLength)
-                grid_dirty = true;
-            elseif y == 1 then
-                if held_step > 0 and x ~= held_step then
+            if gridType == gridType_128 then
+                if x == 15 and y >= 2 and y <= 7 then -- change velocity
+                    local vel = 7 - y
+                    local velLevel = util.round(util.linlin(0,5,0,127,vel))
+                    gridSeq:change_velocity(velLevel)
+                    print("Velocity: " .. velLevel)
+                    grid_dirty = true;
+                elseif x == 16 and y >= 2 and y <= 7 then -- change note length
+                    local yVal = 7 - y
+                    noteLength = seq_noteLengths[8-y]
+                    gridSeq:change_noteLength(noteLength)
+                    print("NoteLength: " .. noteLength)
+                    grid_dirty = true;
+                end
+            end
+
+            if y == 1 then
+                if held_step > 0 and x+xOff ~= held_step then
                     gridSeq:copy_step(held_step)
-                    gridSeq:paste_step(x)
-                    show_temporary_notification("Copy Step "..held_step.." to "..x)
+                    gridSeq:paste_step(x+xOff)
+                    show_temporary_notification("Copy Step "..held_step.." to "..(x+xOff))
                     grid_dirty = true;
                 else
-                    held_step = x
-                    gridSeq:select_stepId(x)
+                    held_step = x+xOff
+                    gridSeq:select_stepId(x+xOff)
                     gridSeqConfig.step_counter[x] = clock.run(function(stepId)
                         clock.sleep(0.25)
                         if gridSeq:get_current_stepId() == stepId then
@@ -1073,68 +1179,61 @@ function GridSeq.grid_key(x,y,z)
                             grid_redraw()
                         end
                         gridSeqConfig.step_counter[x] = nil
-                    end,x)
+                    end,x+xOff)
 
                     grid_dirty = true;
                 end
-            elseif y == 8 then
-                if x == 1 then -- toggle playback
-                    toggle_playback()
-
-                    for i,gKey in pairs(all_gridKeys) do
-                        gKey.enable_key_playback = not is_playing
+            elseif y == 7 then
+                if gridType == gridType_64 then
+                    if x == 7 then -- scroll grid keyboard down
+                        gridKeys:scroll_down()
+                        grid_dirty = true
+                    elseif x == 8 then -- scroll grid keyboard up
+                        gridKeys:scroll_up()
+                        grid_dirty = true
                     end
-
-                    grid_dirty = true
-                elseif x == 2 then -- shift
-                    shift_down = true;
-                    -- GridSeq.show_step_edit = false
-                    show_temporary_notification("Shift")
-                    grid_dirty = true
-                elseif x == 3 then -- change grid mode to play
-                    change_grid_mode("GridPlay")
-                    grid_dirty = true
-                elseif x == 4 then -- change to pat launch mode
-                    change_grid_mode("GridPatLaunch")
-                    grid_dirty = true
-                elseif x == 9 then -- cut
+                end
+            elseif y == 8 then
+                if x == xCut then -- cut
                     -- GridSeq.show_step_edit = false
                     gridSeq.edit_mode = seqmode_cut 
                     show_temporary_notification("Cut")
                     grid_dirty = true
-                elseif x == 10 then -- copy
+                elseif x == xCopy then -- copy
                     gridSeq.edit_mode = seqmode_copy 
                     show_temporary_notification("Copy")
                     grid_dirty = true
-                elseif x == 11 then -- paste
+                elseif x == xPaste then -- paste
                     gridSeq.edit_mode = seqmode_paste 
                     show_temporary_notification("Paste")
                     grid_dirty = true
-                elseif x == 13 then -- prev step
-                    gridSeq:select_prev_step()
-                    grid_dirty = true
-                elseif x == 14 then -- next step
-                    gridSeq:select_next_step()
-                    grid_dirty = true
-                elseif x == 15 then -- scroll grid keyboard down
-                    gridKeys:scroll_down()
-                    grid_dirty = true
-                elseif x == 16 then -- scroll grid keyboard up
-                    gridKeys:scroll_up()
-                    grid_dirty = true
+                end
+
+                if gridType == gridType_128 then
+                    if x == 13 then -- prev step
+                        gridSeq:select_prev_step()
+                        grid_dirty = true
+                    elseif x == 14 then -- next step
+                        gridSeq:select_next_step()
+                        grid_dirty = true
+                    elseif x == 15 then -- scroll grid keyboard down
+                        gridKeys:scroll_down()
+                        grid_dirty = true
+                    elseif x == 16 then -- scroll grid keyboard up
+                        gridKeys:scroll_up()
+                        grid_dirty = true
+                    end
                 end
             end
         else -- key released
-            if y == 1 then
-                
-            elseif y == 8 then
-                if x == 9 then -- cut
+            if y == 8 then
+                if x == xCut then -- cut
                     gridSeq:clear_edit_mode(seqmode_cut)
                     grid_dirty = true
-                elseif x == 10 then -- copy
+                elseif x == xCopy then -- copy
                     gridSeq:clear_edit_mode(seqmode_copy)
                     grid_dirty = true
-                elseif x == 11 then -- paste
+                elseif x == xPaste then -- paste
                     gridSeq:clear_edit_mode(seqmode_paste)
                     grid_dirty = true
                 end
@@ -1142,45 +1241,20 @@ function GridSeq.grid_key(x,y,z)
         end
     elseif gridSeq.edit_mode == seqmode_select and shift_down then -- Shift Mode
         if z == 1 then -- key pressed Shift Mode
-            if y == 1 then -- mute step
-                if gridSeq:set_stepId_mute(x) then
-                    show_temporary_notification("Mute: "..x.." "..(gridSeq:get_stepId_mute(x) and "true" or "false" ))
-                    grid_dirty = true
-                end
-            elseif y == 2 then -- change bar length
-                gridSeq:set_length(x, gridSeq.num_bars)
-                show_temporary_notification("Bar Length: "..gridSeq.bar_length)
-                grid_dirty = true
-            elseif y == 3 then -- change number of bars
-                gridSeq:set_length(gridSeq.bar_length, x)
-                show_temporary_notification("Bar Count: "..gridSeq.num_bars)
-                grid_dirty = true
-            elseif y == 4 then -- select bar
-                if gridSeq:change_selected_bar(x) then
-                    show_temporary_notification("Bar: "..gridSeq.selected_bar)
-                end
-                grid_dirty = true
-            elseif y == 5 then -- select pattern
-                if gridSeq:change_selected_pattern(x) then
-                    show_temporary_notification("Pattern: "..get_pattern_letter())
-                end
-                grid_dirty = true
-            elseif y == 7 then -- change track
-                change_track(x)
-                show_temporary_notification("Track: "..track)
-                grid_dirty = true
-            elseif y == 8 then -- Tool bar
+            if y == 8 then -- Tool bar
                 if confirm_delete and x ~= 5 then
                     confirm_delete = false
                     clear_notification()
                 end
 
                 if x == 3 then -- vel edit
-                    change_grid_mode("GridSeqVel")
+                    change_grid_page("GridSeqVel")
+                    ignoreToolbar = true
                     shift_down = false
                     grid_dirty = true
                 elseif x == 4 then -- level edit
-                    change_grid_mode("GridSeqNoteLengths")
+                    change_grid_page("GridSeqNoteLengths")
+                    ignoreToolbar = true
                     shift_down = false
                     grid_dirty = true
                 elseif x == 5 then -- clear sequence
@@ -1195,51 +1269,45 @@ function GridSeq.grid_key(x,y,z)
                         show_notification("Clear Pattern?")
                     end
                     grid_dirty = true
-                -- elseif x == 9 then -- cut bar
-                --     gridSeq:cut_bar()
-                --     show_temporary_notification("Cut Bar")
-                --     grid_dirty = true
-                -- elseif x == 10 then -- copy bar
-                --     gridSeq:copy_bar()
-                --     show_temporary_notification("Copy Bar")
-                --     grid_dirty = true
-                -- elseif x == 11 then -- paste bar
-                --     gridSeq:paste_bar()
-                --     show_temporary_notification("Paste Bar")
-                --     grid_dirty = true
-                elseif x == 13 then -- shift notes left
-                    show_temporary_notification("Shift Left")
-                    gridSeq:shift_notes_left()
-                    grid_dirty = true
-                elseif x == 14 then -- shift notes right
-                    show_temporary_notification("Shift Right")
-                    gridSeq:shift_notes_right()
-                    grid_dirty = true
-                elseif x == 15 then -- prev bar
-                    gridSeq:select_prev_bar()
-                    show_temporary_notification("Bar " ..gridSeq.selected_bar)
-                    grid_dirty = true
-                elseif x == 16 then -- next bar
-                    gridSeq:select_next_bar()
-                    show_temporary_notification("Bar " ..gridSeq.selected_bar)
-                    grid_dirty = true
+                end
+
+                if gridType == gridType_128 then
+                    if x == 13 then -- shift notes left
+                        show_temporary_notification("Shift Left")
+                        gridSeq:shift_notes_left()
+                        grid_dirty = true
+                    elseif x == 14 then -- shift notes right
+                        show_temporary_notification("Shift Right")
+                        gridSeq:shift_notes_right()
+                        grid_dirty = true
+                    elseif x == 15 then -- prev bar
+                        gridSeq:select_prev_bar()
+                        show_temporary_notification("Bar " ..gridSeq.selected_bar)
+                        grid_dirty = true
+                    elseif x == 16 then -- next bar
+                        gridSeq:select_next_bar()
+                        show_temporary_notification("Bar " ..gridSeq.selected_bar)
+                        grid_dirty = true
+                    end
                 end
             end
         else -- key released Shift Mode
             if y == 8 then
                 if x == 2 then -- shift
-                    shift_down = false
-                    gridSeq.edit_mode = seqmode_select
+                    -- shift_down = false
+                    -- gridSeq.edit_mode = seqmode_select
                     confirm_delete = false
                     clear_notification()
                     grid_dirty = true
-                elseif x == 9 then -- cut
+                end
+
+                if x == xCut then -- cut
                     gridSeq:clear_edit_mode(seqmode_cut)
                     grid_dirty = true
-                elseif x == 10 then -- copy
+                elseif x == xCopy then -- copy
                     gridSeq:clear_edit_mode(seqmode_copy)
                     grid_dirty = true
-                elseif x == 11 then -- paste
+                elseif x == xPaste then -- paste
                     gridSeq:clear_edit_mode(seqmode_paste)
                     grid_dirty = true
                 end
@@ -1248,42 +1316,42 @@ function GridSeq.grid_key(x,y,z)
     elseif gridSeq.edit_mode == seqmode_cut then
         if z == 1 then -- key pressed
             if y == 1 then
-                gridSeq:select_stepId(x)
+                gridSeq:select_stepId(x+xOff)
                 grid_dirty = true;
             elseif y == 3 or y == 4 then
-                if x > gridSeq.num_bars then -- increase num of bars and paste
-                    gridSeq:set_length(gridSeq.bar_length, x)
-                    if gridSeq:paste_bar(x) then
-                        show_temporary_notification("Paste bar: "..x)
+                if x+xOff > gridSeq.num_bars then -- increase num of bars and paste
+                    gridSeq:set_length(gridSeq.bar_length, x+xOff)
+                    if gridSeq:paste_bar(x+xOff) then
+                        show_temporary_notification("Paste bar: "..(x+xOff))
                         grid_dirty = true
                     end
                 else
-                    if gridSeq:does_bar_have_notes(x) then
-                        if gridSeq:cut_bar(x) then
-                            show_temporary_notification("Cut bar: "..x)
+                    if gridSeq:does_bar_have_notes(x+xOff) then
+                        if gridSeq:cut_bar(x+xOff) then
+                            show_temporary_notification("Cut bar: "..(x+xOff))
                             grid_dirty = true
                         end
                     else
-                        if gridSeq:paste_bar(x) then
-                            show_temporary_notification("Paste bar: "..x)
+                        if gridSeq:paste_bar(x+xOff) then
+                            show_temporary_notification("Paste bar: "..(x+xOff))
                             grid_dirty = true
                         end
                     end
                 end
             elseif y == 5 then
-                if gridSeq:does_pattern_have_notes(x) then
-                    patLaunchConfig.clipboard_pattern = gridSeq:get_cloned_patern_at_index(x)
-                    gridSeq:clear_pattern_at_index(x)
+                if gridSeq:does_pattern_have_notes(x+xOff) then
+                    patLaunchConfig.clipboard_pattern = gridSeq:get_cloned_patern_at_index(x+xOff)
+                    gridSeq:clear_pattern_at_index(x+xOff)
 
                     if patLaunchConfig.clipboard_pattern ~= nil then
-                        show_temporary_notification("Pat "..get_pattern_letter(x).." cut")
+                        show_temporary_notification("Pat "..get_pattern_letter(x+xOff).." cut")
                         grid_dirty = true
                     end
                 else
                     if patLaunchConfig.clipboard_pattern ~= nil then
-                        if gridSeq:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, x) then
+                        if gridSeq:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, x+xOff) then
                             -- all_gridSeqs[x]:change_selected_pattern(patIndex)
-                            show_temporary_notification("Paste to "..get_pattern_letter(x))
+                            show_temporary_notification("Paste to "..get_pattern_letter(x+xOff))
                             grid_dirty = true
                         end
                     end
@@ -1291,7 +1359,7 @@ function GridSeq.grid_key(x,y,z)
             end
         else -- key released
             if y == 8 then
-                if x == 9 then -- cut
+                if x == xCut then -- cut
                     gridSeq:clear_edit_mode(seqmode_cut)
                     grid_dirty = true
                 end
@@ -1300,40 +1368,40 @@ function GridSeq.grid_key(x,y,z)
     elseif gridSeq.edit_mode == seqmode_copy then
         if z == 1 then -- key pressed
             if y == 1 then
-                gridSeq:select_stepId(x)
+                gridSeq:select_stepId(x+xOff)
                 grid_dirty = true;
             elseif y == 3 or y == 4 then
-                if x > gridSeq.num_bars then -- increase num of bars and paste
-                    gridSeq:set_length(gridSeq.bar_length, x)
-                    if gridSeq:paste_bar(x) then
-                        show_temporary_notification("Paste bar: "..x)
+                if x+xOff > gridSeq.num_bars then -- increase num of bars and paste
+                    gridSeq:set_length(gridSeq.bar_length, x+xOff)
+                    if gridSeq:paste_bar(x+xOff) then
+                        show_temporary_notification("Paste bar: "..(x+xOff))
                         grid_dirty = true
                     end
                 else
-                    if gridSeq:does_bar_have_notes(x) then
-                        if gridSeq:copy_bar(x) then
-                            show_temporary_notification("Copy bar: "..x)
+                    if gridSeq:does_bar_have_notes(x+xOff) then
+                        if gridSeq:copy_bar(x+xOff) then
+                            show_temporary_notification("Copy bar: "..(x+xOff))
                             grid_dirty = true
                         end
                     else
-                        if gridSeq:paste_bar(x) then
-                            show_temporary_notification("Paste bar: "..x)
+                        if gridSeq:paste_bar(x+xOff) then
+                            show_temporary_notification("Paste bar: "..(x+xOff))
                             grid_dirty = true
                         end
                     end
                 end
             elseif y == 5 then -- copy pattern
-                if gridSeq:does_pattern_have_notes(x) then
-                    patLaunchConfig.clipboard_pattern = gridSeq:get_cloned_patern_at_index(x)
+                if gridSeq:does_pattern_have_notes(x+xOff) then
+                    patLaunchConfig.clipboard_pattern = gridSeq:get_cloned_patern_at_index(x+xOff)
 
                     if patLaunchConfig.clipboard_pattern ~= nil then
-                        show_temporary_notification("Pat "..get_pattern_letter(x).." copy")
+                        show_temporary_notification("Pat "..get_pattern_letter(x+xOff).." copy")
                         grid_dirty = true
                     end
                 else
                     if patLaunchConfig.clipboard_pattern ~= nil then
-                        if gridSeq:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, x) then
-                            show_temporary_notification("Paste to "..get_pattern_letter(x))
+                        if gridSeq:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, x+xOff) then
+                            show_temporary_notification("Paste to "..get_pattern_letter(x+xOff))
                             grid_dirty = true
                         end
                     end
@@ -1341,7 +1409,7 @@ function GridSeq.grid_key(x,y,z)
             end
         else -- key released
             if y == 8 then
-                if x == 10 then -- copy
+                if x == xCopy then -- copy
                     gridSeq:clear_edit_mode(seqmode_copy)
                     grid_dirty = true
                 end
@@ -1350,29 +1418,29 @@ function GridSeq.grid_key(x,y,z)
     elseif gridSeq.edit_mode == seqmode_paste then
         if z == 1 then -- key pressed
             if y == 1 then
-                gridSeq:select_stepId(x)
+                gridSeq:select_stepId(x+xOff)
                 grid_dirty = true;
             elseif y == 3 or y == 4 then
-                if x > gridSeq.num_bars then -- increase num of bars and paste
-                    gridSeq:set_length(gridSeq.bar_length, x)
+                if x+xOff > gridSeq.num_bars then -- increase num of bars and paste
+                    gridSeq:set_length(gridSeq.bar_length, x+xOff)
                 end
 
-                if gridSeq:paste_bar(x) then
-                    show_temporary_notification("Paste bar: "..x)
+                if gridSeq:paste_bar(x+xOff) then
+                    show_temporary_notification("Paste bar: "..(x+xOff))
                     grid_dirty = true
                 end
             elseif y == 5 then
                 if patLaunchConfig.clipboard_pattern ~= nil then
-                    if gridSeq:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, x) then
+                    if gridSeq:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, x+xOff) then
                         -- all_gridSeqs[x]:change_selected_pattern(patIndex)
-                        show_temporary_notification("Paste to "..get_pattern_letter(x))
+                        show_temporary_notification("Paste to "..get_pattern_letter(x+xOff))
                         grid_dirty = true
                     end
                 end
             end
         else -- key released
             if y == 8 then
-                if x == 11 then -- paste
+                if x == xPaste then -- paste
                     gridSeq:clear_edit_mode(seqmode_paste)
                     grid_dirty = true
                 end
@@ -1382,462 +1450,383 @@ function GridSeq.grid_key(x,y,z)
 
     -- release held step when releasing key
     if held_step > 0 and y == 1 and z == 0 then
-        if x == held_step then
-            if gridSeqConfig.step_counter[x] then -- if the long press counter is still active...
-                clock.cancel(gridSeqConfig.step_counter[x]) -- kill the long press counter,
-                -- short_press(x,y) -- because it's a short press.
-            else -- if there was a long press...
-                -- if gridSeq:get_current_stepId() == x then
-                --     showTrigPage = false -- hide trig page
-                --     -- long_release(x,y) -- release the long press.
-                -- end
+        if gridType == gridType_128 then
+            if x == held_step then
+                if gridSeqConfig.step_counter[x] then -- if the long press counter is still active...
+                    clock.cancel(gridSeqConfig.step_counter[x]) -- kill the long press counter,
+                    gridSeqConfig.step_counter[x] = nil
+                    -- short_press(x,y) -- because it's a short press.
+                else -- if there was a long press...
+                    -- if gridSeq:get_current_stepId() == x then
+                    --     showTrigPage = false -- hide trig page
+                    --     -- long_release(x,y) -- release the long press.
+                    -- end
+                end
+    
+                held_step = 0
+                showTrigPage = false
+                GridSeq.show_step_edit = false
+                grid_dirty = true
             end
-
-            held_step = 0
-            showTrigPage = false
-            GridSeq.show_step_edit = false
-            grid_dirty = true
+        elseif gridType == gridType_64 then
+            if x == held_step or x + 8 == held_step then
+                if gridSeqConfig.step_counter[x] then -- if the long press counter is still active...
+                    clock.cancel(gridSeqConfig.step_counter[x]) -- kill the long press counter,
+                    gridSeqConfig.step_counter[x] = nil
+                    -- short_press(x,y) -- because it's a short press.
+                else -- if there was a long press...
+                    -- if gridSeq:get_current_stepId() == x then
+                    --     showTrigPage = false -- hide trig page
+                    --     -- long_release(x,y) -- release the long press.
+                    -- end
+                end
+    
+                held_step = 0
+                showTrigPage = false
+                GridSeq.show_step_edit = false
+                grid_dirty = true
+            end
         end
     end
-    
 
+    if not ignoreToolbar then
+        grid_key_toolbar(x,y,z)
+        grid_key_shift(x,y,z)
+    end
 
-    -- old
-            -- if z == 1 then -- key pressed
-            --     if x == 15 and y >= 2 and y <= 7 then -- change velocity
-            --         local vel = 7 - y
-            --         local velLevel = util.round(util.linlin(0,5,0,127,vel))
-            --         gridSeq:change_velocity(velLevel)
-            --         print("Velocity: " .. velLevel)
-            --         grid_dirty = true;
-            --     elseif x == 16 and y >= 2 and y <= 7 then -- change note length
-            --         local yVal = 7 - y
-            --         noteLength = seq_noteLengths[8-y]
-            --         gridSeq:change_noteLength(noteLength)
-            --         print("NoteLength: " .. noteLength)
-            --         grid_dirty = true;
-            --     elseif y == 1 and not shift_down then
-            --         gridSeq:select_stepId(x)
-            --         grid_dirty = true;
-            --     elseif y == 1 and shift_down then -- change bar length
-            --         gridSeq:set_length(x, gridSeq.num_bars)
-            --         show_temporary_notification("Bar Length: "..gridSeq.bar_length)
-            --         grid_dirty = true
-            --     elseif y == 2 and shift_down then -- change number of bars
-            --         gridSeq:set_length(gridSeq.bar_length, x)
-            --         show_temporary_notification("Bar Count: "..gridSeq.num_bars)
-            --         grid_dirty = true
-            --     elseif y == 3 and shift_down then -- select bar
-            --         if gridSeq:change_selected_bar(x) then
-            --             show_temporary_notification("Bar: "..gridSeq.selected_bar)
-            --         end
-            --         grid_dirty = true
-            --     elseif y == 6 and shift_down then -- change track
-            --         change_track(x)
-            --         show_temporary_notification("Track: "..track)
-            --         grid_dirty = true
-            --     elseif y == 8 and shift_down == false then
-            --         if x == 1 then -- toggle playback
-            --             toggle_playback()
+    -- disable key playback while playing
+    for i,gKey in pairs(all_gridKeys) do
+        gKey.enable_key_playback = not is_playing
+    end
+end
 
-            --             for i,gKey in pairs(all_gridKeys) do
-            --                 gKey.enable_key_playback = not is_playing
-            --             end
+-- edit_type
+-- 1 = velocity
+-- 2 = note length
+function grid_key_param_edit(x,y,z,edit_type)
+    local xOff = 0
+    local xCut = 9
+    local xCopy = 10
+    local xPaste = 11
 
-            --             grid_dirty = true
-            --         elseif x == 5 then -- change grid mode to play
-            --             change_grid_mode("GridPlay")
-            --             grid_dirty = true
-            --         elseif x == 7 then -- shift
-            --             shift_down = true;
-            --             show_temporary_notification("Shift")
-            --             grid_dirty = true
-            --         elseif x == 9 then -- cut
-            --             gridSeq.edit_mode = seqmode_cut 
-            --             show_temporary_notification("Cut")
-            --             grid_dirty = true
-            --         elseif x == 10 then -- copy
-            --             gridSeq.edit_mode = seqmode_copy 
-            --             show_temporary_notification("Copy")
-            --             grid_dirty = true
-            --         elseif x == 11 then -- paste
-            --             gridSeq.edit_mode = seqmode_paste 
-            --             show_temporary_notification("Paste")
-            --             grid_dirty = true
-            --         elseif x == 13 then -- prev step
-            --             gridSeq:select_prev_step()
-            --             grid_dirty = true
-            --         elseif x == 14 then -- next step
-            --             gridSeq:select_next_step()
-            --             grid_dirty = true
-            --         elseif x == 15 then -- scroll grid keyboard down
-            --             gridKeys:scroll_down()
-            --             grid_dirty = true
-            --         elseif x == 16 then -- scroll grid keyboard up
-            --             gridKeys:scroll_up()
-            --             grid_dirty = true
-            --         end
-            --     elseif y == 8 then -- shift key down
-            --         if confirm_delete and x ~= 5 then
-            --             confirm_delete = false
-            --             clear_notification()
-            --         end
+    if gridType == gridType_64 then
+        xCut = 4
+        xCopy = 5
+        xPaste = 6
 
-            --         if x == 2 then -- vel edit
-            --             change_grid_mode("GridSeqVel")
-            --             shift_down = false
-            --             grid_dirty = true
-            --         elseif x == 3 then -- level edit
-            --             change_grid_mode("GridSeqNoteLengths")
-            --             shift_down = false
-            --             grid_dirty = true
-            --         elseif x == 4 then -- Save
-            --             gridSeq:save_seq()
-            --             show_temporary_notification("track saved")
-            --             grid_dirty = true
-            --         elseif x == 5 then -- clear sequence
-            --             if confirm_delete then
-            --                 gridSeq:clear_all()
-            --                 engine.noteOffAll()
-            --                 confirm_delete = false
-            --                 clear_notification()
-            --                 show_temporary_notification("Pattern cleared.")
-            --             else
-            --                 confirm_delete = true
-            --                 show_notification("Clear Pattern?")
-            --             end
-            --             grid_dirty = true
-            --         elseif x == 6 then -- load
-            --             gridSeq:load_seq()
-            --             show_temporary_notification("track loaded")
-            --             grid_dirty = true
-            --         elseif x == 9 then -- cut bar
-            --             gridSeq:cut_bar()
-            --             show_temporary_notification("Cut Bar")
-            --             grid_dirty = true
-            --         elseif x == 10 then -- copy bar
-            --             gridSeq:copy_bar()
-            --             show_temporary_notification("Copy Bar")
-            --             grid_dirty = true
-            --         elseif x == 11 then -- paste bar
-            --             gridSeq:paste_bar()
-            --             show_temporary_notification("Paste Bar")
-            --             grid_dirty = true
-            --         elseif x == 13 then -- prev step
-            --             show_temporary_notification("Shift Left")
-            --             gridSeq:shift_notes_left()
-            --             grid_dirty = true
-            --         elseif x == 14 then -- next step
-            --             show_temporary_notification("Shift Right")
-            --             gridSeq:shift_notes_right()
-            --             grid_dirty = true
-            --         elseif x == 15 then -- prev bar
-            --             gridSeq:select_prev_bar()
-            --             show_temporary_notification("Bar " ..gridSeq.selected_bar)
-            --             grid_dirty = true
-            --         elseif x == 16 then -- next bar
-            --             gridSeq:select_next_bar()
-            --             show_temporary_notification("Bar " ..gridSeq.selected_bar)
-            --             grid_dirty = true
-            --         end
-            --     end
-            -- else -- key released
-            --     if y == 8 and shift_down == false then
-            --         if x == 9 then -- cut
-            --             gridSeq:clear_edit_mode(seqmode_cut)
-            --             grid_dirty = true
-            --         elseif x == 10 then -- copy
-            --             gridSeq:clear_edit_mode(seqmode_copy)
-            --             grid_dirty = true
-            --         elseif x == 11 then -- paste
-            --             gridSeq:clear_edit_mode(seqmode_paste)
-            --             grid_dirty = true
-            --         end
-            --     elseif y == 8 then -- shift release
-            --         if x == 7 then -- shift
-            --             shift_down = false
-            --             gridSeq.edit_mode = seqmode_select
-            --             -- gridSeq:clear_edit_mode(seqmode_delete)
-            --             confirm_delete = false
-            --             clear_notification()
-            --             grid_dirty = true
-            --         elseif x == 9 then -- cut
-            --             gridSeq:clear_edit_mode(seqmode_cut)
-            --             grid_dirty = true
-            --         elseif x == 10 then -- copy
-            --             gridSeq:clear_edit_mode(seqmode_copy)
-            --             grid_dirty = true
-            --         elseif x == 11 then -- paste
-            --             gridSeq:clear_edit_mode(seqmode_paste)
-            --             grid_dirty = true
-            --         end
-            --     end
-            -- end
+        if edit_steps_9_16 then
+            xOff = 8
+        end
+    end
 
-    if grid_dirty then
-        grid_redraw()
+    if z == 1 then -- key pressed
+        if y == 1 then
+            gridSeq:select_stepId(x+xOff)
+            grid_dirty = true;
+        elseif y > 1 and y < 8 then
+            if edit_type == 1 then -- velocity
+                local vel = 7 - y
+                local velLevel = util.round(util.linlin(0,5,0,127,vel))
+                gridSeq:change_velocity_stepId(velLevel, x+xOff)
+                print("Velocity: " .. velLevel)
+                grid_dirty = true;
+            elseif edit_type == 2 then -- note lengths
+                local yVal = 7 - y
+
+                noteLength = seq_noteLengths[8-y]
+                gridSeq:change_noteLength_stepId(noteLength, x)
+
+                print("NoteLength: " .. noteLength)
+                grid_dirty = true;
+            end
+        elseif y == 8 then
+            if gridType == gridType_128 then
+                if x == 1 then -- switch to seq edit mode
+                    change_grid_page("GridSeq")
+                    grid_dirty = true
+                elseif x == 3 then 
+                    change_grid_page("GridSeqVel")
+                    grid_dirty = true
+                elseif x == 4 then -- switch to seq edit mode
+                    change_grid_page("GridSeqNoteLengths")
+                    grid_dirty = true
+                elseif x == 5 then 
+                    show_temporary_notification("Coming soon")
+                    -- change_grid_page("GridSeq")
+                    -- grid_dirty = true
+                elseif x == xCut then -- cut
+                    gridSeq.edit_mode = seqmode_cut 
+                    show_temporary_notification("Cut")
+                    grid_dirty = true
+                elseif x == xCopy then -- copy
+                    gridSeq.edit_mode = seqmode_copy 
+                    show_temporary_notification("Copy")
+                    grid_dirty = true
+                elseif x == xPaste then -- paste
+                    gridSeq.edit_mode = seqmode_paste 
+                    show_temporary_notification("Paste")
+                    grid_dirty = true
+                end
+            elseif gridType == gridType_64 then
+                if x == 1 then -- switch to seq edit mode
+                    change_grid_page("GridSeq")
+                    grid_dirty = true
+                elseif x == 3 then 
+                    if edit_type == 1 then -- velocity
+                        change_grid_page("GridSeqNoteLengths")
+                    elseif edit_type == 2 then -- note lengths
+                        change_grid_page("GridSeqVel")
+                    end
+                    grid_dirty = true
+                elseif x == xCut then -- cut
+                    gridSeq.edit_mode = seqmode_cut 
+                    show_temporary_notification("Cut")
+                    grid_dirty = true
+                elseif x == xCopy then -- copy
+                    gridSeq.edit_mode = seqmode_copy 
+                    show_temporary_notification("Copy")
+                    grid_dirty = true
+                elseif x == xPaste then -- paste
+                    gridSeq.edit_mode = seqmode_paste 
+                    show_temporary_notification("Paste")
+                    grid_dirty = true
+                elseif x == 7 then -- edit steps 1-8
+                    edit_steps_9_16 = false
+                    show_temporary_notification("Edit 1-8")
+                    grid_dirty = true
+                elseif x == 8 then -- edit steps 9-16
+                    edit_steps_9_16 = true
+                    show_temporary_notification("Edit 9-16")
+                    grid_dirty = true
+                end
+            end
+        end
+    else -- key released
+        if y == 8 then
+            if x == xCut then -- cut
+                gridSeq:clear_edit_mode(seqmode_cut)
+                grid_dirty = true
+            elseif x == xCopy then -- copy
+                gridSeq:clear_edit_mode(seqmode_copy)
+                grid_dirty = true
+            elseif x == xPaste then -- paste
+                gridSeq:clear_edit_mode(seqmode_paste)
+                grid_dirty = true
+            end
+        end
     end
 end
 
 function GridSeqVel.grid_key(x,y,z)
-    -- local grid_dirty = gridKeys:grid_key(x,y,z)
+    grid_key_param_edit(x,y,z,1)
 
-    if z == 1 then -- key pressed
-        -- if x == 15 and y >= 2 and y <= 7 then -- change velocity
-        --     local vel = 7 - y
+    -- local xOff = 0
+    -- local xCut = 9
+    -- local xCopy = 10
+    -- local xPaste = 11
 
-        --     -- config.note_velocity = util.round(util.linlin(0,5,0,127,vel))
+    -- if gridType == gridType_64 then
+    --     xCut = 4
+    --     xCopy = 5
+    --     xPaste = 6
 
-        --     local velLevel = util.round(util.linlin(0,5,0,127,vel))
+    --     if edit_steps_9_16 then
+    --         xOff = 8
+    --     end
+    -- end
 
-        --     gridSeq:change_velocity(velLevel)
+    -- if z == 1 then -- key pressed
+    --     if y == 1 then
+    --         gridSeq:select_stepId(x+xOff)
+    --         grid_dirty = true;
+    --     elseif y > 1 and y < 8 then
+    --         local vel = 7 - y
 
-        --     -- gridKeys.note_velocity = config.note_velocity
+    --         local velLevel = util.round(util.linlin(0,5,0,127,vel))
 
-        --     print("Velocity: " .. velLevel)
-        --     grid_dirty = true;
-        -- -- elseif x == 16 and y >= 2 and y <= 7 then -- change velocity
-        -- --     local vel = 7 - y
+    --         gridSeq:change_velocity_stepId(velLevel, x+xOff)
 
-        -- --     config.note_velocity = util.round(util.linlin(0,5,0,127,vel))
-        -- --     gridKeys.note_velocity = config.note_velocity
+    --         print("Velocity: " .. velLevel)
+    --         grid_dirty = true;
 
-        -- --     print("Velocity: " .. config.note_velocity)
-        -- --     grid_dirty = true;
-        -- elseif x == 16 and y >= 2 and y <= 7 then -- change velocity
-        --     local yVal = 7 - y
-
-        --     noteLength = seq_noteLengths[8-y]
-
-        --     -- local noteLength = util.round(util.linlin(0,5,0,16,yVal))
-
-        --     gridSeq:change_noteLength(noteLength)
-
-        --     print("NoteLength: " .. noteLength)
-        --     grid_dirty = true;
-        if y == 1 then
-            gridSeq:select_stepId(x)
-            grid_dirty = true;
-        elseif y > 1 and y < 8 then
-            local vel = 7 - y
-
-            local velLevel = util.round(util.linlin(0,5,0,127,vel))
-
-            gridSeq:change_velocity_stepId(velLevel, x)
-
-            print("Velocity: " .. velLevel)
-            grid_dirty = true;
-
-        elseif y == 8 then
-            if x == 1 then -- switch to seq edit mode
-                change_grid_mode("GridSeq")
-                grid_dirty = true
-            elseif x == 3 then 
-                change_grid_mode("GridSeq")
-                grid_dirty = true
-            elseif x == 4 then -- switch to seq edit mode
-                change_grid_mode("GridSeqNoteLengths")
-                grid_dirty = true
-            elseif x == 5 then 
-                show_temporary_notification("Coming soon")
-                -- change_grid_mode("GridSeq")
-                -- grid_dirty = true
-            elseif x == 9 then -- cut
-                gridSeq.edit_mode = seqmode_cut 
-                grid_dirty = true
-            elseif x == 10 then -- copy
-                gridSeq.edit_mode = seqmode_copy 
-                grid_dirty = true
-            elseif x == 11 then -- paste
-                gridSeq.edit_mode = seqmode_paste 
-                grid_dirty = true
-            end
-
-
-
-            -- if x == 1 then -- toggle playback or clear sequence if delete key is held
-            --     if gridSeq.edit_mode == seqmode_delete then
-            --         gridSeq:clear_all()
-            --         engine.noteOffAll()
-            --         grid_dirty = true
-            --     else
-            --         gridSeq:play()
-            --         grid_dirty = true
-
-            --         gridKeys.enable_key_playback = not gridSeq.is_playing
-            --     end
-            -- elseif x == 2 then -- change keyboard layout to chromatic
-            --     -- gridKeys.layout_mode = 1
-            --     -- engine.noteOffAll() -- layout change can cause notes to keep ringing
-            --     -- grid_dirty = true
-            -- elseif x == 3 then -- change keyboard layout to in-scale
-            --     if gridKeys.layout_mode == 1 then
-            --         gridKeys.layout_mode = 2
-            --     else
-            --         gridKeys.layout_mode = 1
-            --     end
-                
-            --     engine.noteOffAll() -- layout change can cause notes to keep ringing
-            --     grid_dirty = true
-            -- elseif x == 4 then -- enable highlighted notes
-            --     gridKeys.enable_note_highlighting = not gridKeys.enable_note_highlighting
-            --     grid_dirty = true
-            -- elseif x == 5 then -- change grid mode to play
-            --     config.grid_page_index = 1
-            --     current_grid_page = grid_pages[config.grid_page_index]
-            --     gridSeq.step_edit = false
-            --     gridKeys:resize_grid(1,1,16,7)
-            --     gridSeq:clear_step_edit()
-            --     gridSeq.edit_mode = seqmode_select
-            --     gridKeys.enable_key_playback = true
-            --     grid_dirty = true
-            -- elseif x == 7 then -- delete steps
-            --     gridSeq.edit_mode = seqmode_delete 
-            --     grid_dirty = true
-            
-
-            -- elseif x == 13 then -- prev step
-            --     gridSeq:select_prev_step()
-            --     grid_dirty = true
-            -- elseif x == 14 then -- next step
-            --     gridSeq:select_next_step()
-            --     grid_dirty = true
-            -- elseif x == 15 then -- scroll grid keyboard down
-            --     gridKeys:scroll_down()
-            --     grid_dirty = true
-            -- elseif x == 16 then -- scroll grid keyboard up
-            --     gridKeys:scroll_up()
-            --     grid_dirty = true
-            -- end
-        end
-    else -- key released
-        if y == 8 then
-            if x == 7 then -- delete
-                gridSeq:clear_edit_mode(seqmode_delete)
-                grid_dirty = true
-            elseif x == 9 then -- cut
-                gridSeq:clear_edit_mode(seqmode_cut)
-                grid_dirty = true
-            elseif x == 10 then -- copy
-                gridSeq:clear_edit_mode(seqmode_copy)
-                grid_dirty = true
-            elseif x == 11 then -- paste
-                gridSeq:clear_edit_mode(seqmode_paste)
-                grid_dirty = true
-            end
-        end
-    end
-
-    if grid_dirty then
-        grid_redraw()
-    end
+    --     elseif y == 8 then
+    --         if gridType == gridType_128 then
+    --             if x == 1 then -- switch to seq edit mode
+    --                 change_grid_page("GridSeq")
+    --                 grid_dirty = true
+    --             elseif x == 3 then 
+    --                 change_grid_page("GridSeq")
+    --                 grid_dirty = true
+    --             elseif x == 4 then -- switch to seq edit mode
+    --                 change_grid_page("GridSeqNoteLengths")
+    --                 grid_dirty = true
+    --             elseif x == 5 then 
+    --                 show_temporary_notification("Coming soon")
+    --                 -- change_grid_page("GridSeq")
+    --                 -- grid_dirty = true
+    --             elseif x == xCut then -- cut
+    --                 gridSeq.edit_mode = seqmode_cut 
+    --                 show_temporary_notification("Cut")
+    --                 grid_dirty = true
+    --             elseif x == xCopy then -- copy
+    --                 gridSeq.edit_mode = seqmode_copy 
+    --                 show_temporary_notification("Copy")
+    --                 grid_dirty = true
+    --             elseif x == xPaste then -- paste
+    --                 gridSeq.edit_mode = seqmode_paste 
+    --                 show_temporary_notification("Paste")
+    --                 grid_dirty = true
+    --             end
+    --         elseif gridType == gridType_64 then
+    --             if x == 1 then -- switch to seq edit mode
+    --                 change_grid_page("GridSeq")
+    --                 grid_dirty = true
+    --             elseif x == 3 then 
+    --                 change_grid_page("GridSeqNoteLengths")
+    --                 grid_dirty = true
+    --             elseif x == xCut then -- cut
+    --                 gridSeq.edit_mode = seqmode_cut 
+    --                 show_temporary_notification("Cut")
+    --                 grid_dirty = true
+    --             elseif x == xCopy then -- copy
+    --                 gridSeq.edit_mode = seqmode_copy 
+    --                 show_temporary_notification("Copy")
+    --                 grid_dirty = true
+    --             elseif x == xPaste then -- paste
+    --                 gridSeq.edit_mode = seqmode_paste 
+    --                 show_temporary_notification("Paste")
+    --                 grid_dirty = true
+    --             elseif x == 7 then -- edit steps 1-8
+    --                 edit_steps_9_16 = false
+    --                 show_temporary_notification("Edit 1-8")
+    --                 grid_dirty = true
+    --             elseif x == 8 then -- edit steps 9-16
+    --                 edit_steps_9_16 = true
+    --                 show_temporary_notification("Edit 9-16")
+    --                 grid_dirty = true
+    --             end
+    --         end
+    --     end
+    -- else -- key released
+    --     if y == 8 then
+    --         if x == xCut then -- cut
+    --             gridSeq:clear_edit_mode(seqmode_cut)
+    --             grid_dirty = true
+    --         elseif x == xCopy then -- copy
+    --             gridSeq:clear_edit_mode(seqmode_copy)
+    --             grid_dirty = true
+    --         elseif x == xPaste then -- paste
+    --             gridSeq:clear_edit_mode(seqmode_paste)
+    --             grid_dirty = true
+    --         end
+    --     end
+    -- end
 end
 
 function GridSeqNoteLengths.grid_key(x,y,z)
-    if z == 1 then -- key pressed
-        if y == 1 then
-            gridSeq:select_stepId(x)
-            grid_dirty = true;
-        elseif y > 1 and y < 8 then
-            local yVal = 7 - y
+    grid_key_param_edit(x,y,z,2)
 
-            noteLength = seq_noteLengths[8-y]
-            gridSeq:change_noteLength_stepId(noteLength, x)
+    -- if z == 1 then -- key pressed
+    --     if y == 1 then
+    --         gridSeq:select_stepId(x)
+    --         grid_dirty = true;
+    --     elseif y > 1 and y < 8 then
+    --         local yVal = 7 - y
 
-            print("NoteLength: " .. noteLength)
-            grid_dirty = true;
-        elseif y == 8 then
-            if x == 1 then -- switch to seq edit mode
-                change_grid_mode("GridSeq")
-                grid_dirty = true
-            elseif x == 3 then 
-                change_grid_mode("GridSeqVel")
-                grid_dirty = true
-            elseif x == 4 then -- switch to seq edit mode
-                change_grid_mode("GridSeq")
-                grid_dirty = true
-            elseif x == 5 then 
-                show_temporary_notification("Coming soon")
-                -- change_grid_mode("GridSeq")
-                -- grid_dirty = true
-            elseif x == 9 then -- cut
-                gridSeq.edit_mode = seqmode_cut 
-                grid_dirty = true
-            elseif x == 10 then -- copy
-                gridSeq.edit_mode = seqmode_copy 
-                grid_dirty = true
-            elseif x == 11 then -- paste
-                gridSeq.edit_mode = seqmode_paste 
-                grid_dirty = true
-            end
-        end
-    else -- key released
-        if y == 8 then
-            if x == 7 then -- delete
-                gridSeq:clear_edit_mode(seqmode_delete)
-                grid_dirty = true
-            elseif x == 9 then -- cut
-                gridSeq:clear_edit_mode(seqmode_cut)
-                grid_dirty = true
-            elseif x == 10 then -- copy
-                gridSeq:clear_edit_mode(seqmode_copy)
-                grid_dirty = true
-            elseif x == 11 then -- paste
-                gridSeq:clear_edit_mode(seqmode_paste)
-                grid_dirty = true
-            end
-        end
-    end
+    --         noteLength = seq_noteLengths[8-y]
+    --         gridSeq:change_noteLength_stepId(noteLength, x)
 
-    if grid_dirty then
-        grid_redraw()
-    end
+    --         print("NoteLength: " .. noteLength)
+    --         grid_dirty = true;
+    --     elseif y == 8 then
+    --         if x == 1 then -- switch to seq edit mode
+    --             change_grid_page("GridSeq")
+    --             grid_dirty = true
+    --         elseif x == 3 then 
+    --             change_grid_page("GridSeqVel")
+    --             grid_dirty = true
+    --         elseif x == 4 then -- switch to seq edit mode
+    --             change_grid_page("GridSeq")
+    --             grid_dirty = true
+    --         elseif x == 5 then 
+    --             show_temporary_notification("Coming soon")
+    --             -- change_grid_page("GridSeq")
+    --             -- grid_dirty = true
+    --         elseif x == 9 then -- cut
+    --             gridSeq.edit_mode = seqmode_cut 
+    --             grid_dirty = true
+    --         elseif x == 10 then -- copy
+    --             gridSeq.edit_mode = seqmode_copy 
+    --             grid_dirty = true
+    --         elseif x == 11 then -- paste
+    --             gridSeq.edit_mode = seqmode_paste 
+    --             grid_dirty = true
+    --         end
+    --     end
+    -- else -- key released
+    --     if y == 8 then
+    --         if x == 7 then -- delete
+    --             gridSeq:clear_edit_mode(seqmode_delete)
+    --             grid_dirty = true
+    --         elseif x == 9 then -- cut
+    --             gridSeq:clear_edit_mode(seqmode_cut)
+    --             grid_dirty = true
+    --         elseif x == 10 then -- copy
+    --             gridSeq:clear_edit_mode(seqmode_copy)
+    --             grid_dirty = true
+    --         elseif x == 11 then -- paste
+    --             gridSeq:clear_edit_mode(seqmode_paste)
+    --             grid_dirty = true
+    --         end
+    --     end
+    -- end
 end
-
-
-
--- function GridPatLaunch.init()
---     print("GridPatLaunch.init()")
---     GridPatLaunch.edit_mode = seqmode_select
--- end
-
--- function GridPatLaunch.on_enable()
---     print("GridPatLaunch.on_enable()")
---     GridPatLaunch.edit_mode = seqmode_select
--- end
 
 GridPatLaunch.heldPattern = nil
 
 function GridPatLaunch.grid_key(x,y,z)
-    local grid_dirty = false
+    -- print("patLaunchConfig.edit_mode: "..patLaunchConfig.edit_mode)
 
-    print("patLaunchConfig.edit_mode: "..patLaunchConfig.edit_mode)
+    local xOff = 0
+    local xCut = 9
+    local xCopy = 10
+    local xPaste = 11
+
+    if gridType == gridType_64 then
+        xCut = 4
+        xCopy = 5
+        xPaste = 6
+
+        if edit_steps_9_16 then
+            xOff = 8
+        end
+    end
+
 
     local patIndex = y - 1 + patLaunchConfig.y_offset
 
     if patLaunchConfig.edit_mode == 1 and not shift_down then
         if z == 1 then -- key pressed
             if y == 1 then
-                change_track(x)
-                show_temporary_notification("Track "..x)
+                change_track(x+xOff)
+                show_temporary_notification("Track "..(x+xOff))
                 grid_dirty = true
             elseif y > 1 and y < 8 then
                 if GridPatLaunch.heldPattern == nil then
-                    change_track(x)
-                    all_gridSeqs[x]:change_selected_pattern(patIndex)
+                    change_track(x+xOff)
+                    all_gridSeqs[x+xOff]:change_selected_pattern(patIndex)
                     show_temporary_notification("Patern "..get_pattern_letter(all_gridSeqs[x].selected_pattern))
 
                     GridPatLaunch.heldPattern = {}
-                    GridPatLaunch.heldPattern.x = x
+                    GridPatLaunch.heldPattern.x = x+xOff
                     GridPatLaunch.heldPattern.y = y
                     GridPatLaunch.heldPattern.patIndex = patIndex
-
                 else
-                    if x ~= GridPatLaunch.heldPattern.x or y ~= GridPatLaunch.heldPattern.y then
+                    if x+xOff ~= GridPatLaunch.heldPattern.x or y ~= GridPatLaunch.heldPattern.y then
                         local pat = all_gridSeqs[GridPatLaunch.heldPattern.x]:get_cloned_patern_at_index(GridPatLaunch.heldPattern.patIndex)
 
                         if pat ~= nil then
-                            if all_gridSeqs[x]:paste_pattern_to_index(pat, patIndex) then
+                            if all_gridSeqs[x+xOff]:paste_pattern_to_index(pat, patIndex) then
                                 show_temporary_notification("Paste "..GridPatLaunch.heldPattern.x..get_pattern_letter(GridPatLaunch.heldPattern.patIndex).. " to "..x..get_pattern_letter(patIndex))
                                 grid_dirty = true
                             end
@@ -1846,50 +1835,57 @@ function GridPatLaunch.grid_key(x,y,z)
                 end
                 grid_dirty = true
             elseif y == 8 then -- toolbar
-                if x == 1 then -- Toggle playback
-                    toggle_playback()
-                    grid_dirty = true
-                elseif x == 2 then -- shift
-                    shift_down = true;
-                    show_temporary_notification("Shift")
-                    grid_dirty = true
-                elseif x == 3 then
-                    change_grid_mode("GridPlay")
-                    grid_dirty = true
-                elseif x == 5 then -- switch to seq edit mode
-                    change_grid_mode("GridSeq")
-                    grid_dirty = true
-                elseif x == 9 then -- cut
+                if x == xCut then -- cut
                     patLaunchConfig.edit_mode = 2 
                     show_temporary_notification("Cut")
                     grid_dirty = true
-                elseif x == 10 then -- copy
+                elseif x == xCopy then -- copy
                     patLaunchConfig.edit_mode = 3 
                     show_temporary_notification("Copy")
                     grid_dirty = true
-                elseif x == 11 then -- paste
+                elseif x == xPaste then -- paste
                     patLaunchConfig.edit_mode = 4 
                     show_temporary_notification("Paste")
                     grid_dirty = true
-                elseif x == 15 then -- scroll grid keyboard down
+                end
+
+                if gridType == gridType_128 then
+                    if x == 15 then -- scroll grid keyboard down
+                        -- gridKeys:scroll_down()
+                        patLaunchConfig.y_offset = math.min(patLaunchConfig.y_offset + 1,15)
+                        print("y_offset = "..patLaunchConfig.y_offset)
+                        grid_dirty = true
+                    elseif x == 16 then -- scroll grid keyboard up
+                        -- gridKeys:scroll_up()
+                        patLaunchConfig.y_offset = math.max(patLaunchConfig.y_offset - 1, 0)
+                        print("y_offset = "..patLaunchConfig.y_offset)
+                        grid_dirty = true
+                    end
+                end
+            end
+        else  -- key released
+        end
+    elseif patLaunchConfig.edit_mode == 1 and shift_down then -- Shift Mode
+        if gridType == gridType_64 then
+            if y == 8 and z == 1 then
+                if x == 5 then -- scroll grid keyboard down
                     -- gridKeys:scroll_down()
                     patLaunchConfig.y_offset = math.min(patLaunchConfig.y_offset + 1,15)
                     print("y_offset = "..patLaunchConfig.y_offset)
                     grid_dirty = true
-                elseif x == 16 then -- scroll grid keyboard up
+                elseif x == 6 then -- scroll grid keyboard up
                     -- gridKeys:scroll_up()
                     patLaunchConfig.y_offset = math.max(patLaunchConfig.y_offset - 1, 0)
                     print("y_offset = "..patLaunchConfig.y_offset)
                     grid_dirty = true
                 end
             end
-        else  -- key released
         end
-    elseif patLaunchConfig.edit_mode == 1 and shift_down then -- Shift Mode
+
         if z == 1 then -- key pressed
             if y == 1 then
-                all_gridSeqs[x].mute_seq = not all_gridSeqs[x].mute_seq
-                show_temporary_notification("Track "..x.." "..(all_gridSeqs[x].mute_seq and "mute" or "unmute"))
+                all_gridSeqs[x+xOff].mute_seq = not all_gridSeqs[x+xOff].mute_seq
+                show_temporary_notification("Track "..(x+xOff).." "..(all_gridSeqs[x+xOff].mute_seq and "mute" or "unmute"))
                 grid_dirty = true
             elseif y > 1 and y < 8 then
                 for i = 1, #all_gridSeqs do
@@ -1903,8 +1899,8 @@ function GridPatLaunch.grid_key(x,y,z)
         else  -- key released
             if y == 8 then
                 if x == 2 then -- shift
-                    shift_down = false
-                    gridSeq.edit_mode = seqmode_select
+                    -- shift_down = false
+                    -- gridSeq.edit_mode = seqmode_select
                     confirm_delete = false
                     clear_notification()
                     grid_dirty = true
@@ -1914,16 +1910,16 @@ function GridPatLaunch.grid_key(x,y,z)
     elseif patLaunchConfig.edit_mode == 2 then -- cut
         if z == 1 then -- key pressed
             if y == 1 then -- copy gridKey settings
-                change_track(x)
-                patLaunchConfig.clipboard_gridKeys = all_gridKeys[x]:get_serialized()
+                change_track(x+xOff)
+                patLaunchConfig.clipboard_gridKeys = all_gridKeys[x+xOff]:get_serialized()
                 patLaunchConfig.track_paste_mode = 1
-                show_temporary_notification("Trk "..x.." copy settings")
+                show_temporary_notification("Trk "..(x+xOff).." copy settings")
                 grid_dirty = true
             elseif y > 1 and y < 8 then
-                change_track(x)
-                if all_gridSeqs[x]:does_pattern_have_notes(patIndex) then
-                    patLaunchConfig.clipboard_pattern = all_gridSeqs[x]:get_cloned_patern_at_index(patIndex)
-                    all_gridSeqs[x]:clear_pattern_at_index(patIndex)
+                change_track(x+xOff)
+                if all_gridSeqs[x+xOff]:does_pattern_have_notes(patIndex) then
+                    patLaunchConfig.clipboard_pattern = all_gridSeqs[x+xOff]:get_cloned_patern_at_index(patIndex)
+                    all_gridSeqs[x+xOff]:clear_pattern_at_index(patIndex)
 
                     if patLaunchConfig.clipboard_pattern ~= nil then
                         show_temporary_notification("Pat "..get_pattern_letter(patIndex).." cut")
@@ -1931,7 +1927,7 @@ function GridPatLaunch.grid_key(x,y,z)
                     end
                 else
                     if patLaunchConfig.clipboard_pattern ~= nil then
-                        if all_gridSeqs[x]:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, patIndex) then
+                        if all_gridSeqs[x+xOff]:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, patIndex) then
                             -- all_gridSeqs[x]:change_selected_pattern(patIndex)
                             show_temporary_notification("Paste to "..get_pattern_letter(patIndex))
                             grid_dirty = true
@@ -1941,7 +1937,7 @@ function GridPatLaunch.grid_key(x,y,z)
             end
         else -- key released
             if y == 8 then
-                if x == 9 then
+                if x == xCut then
                     patLaunchConfig.edit_mode = 1
                     grid_dirty = true
                 end
@@ -1950,22 +1946,22 @@ function GridPatLaunch.grid_key(x,y,z)
     elseif patLaunchConfig.edit_mode == 3 then -- copy
         if z == 1 then -- key pressed
             if y == 1 then
-                change_track(x)
-                patLaunchConfig.clipboard_gridSeq = all_gridSeqs[x]:get_serialized()
+                change_track(x+xOff)
+                patLaunchConfig.clipboard_gridSeq = all_gridSeqs[x+xOff]:get_serialized()
                 patLaunchConfig.track_paste_mode = 2
-                show_temporary_notification("Track "..x.." copied")
+                show_temporary_notification("Track "..(x+xOff).." copied")
                 grid_dirty = true
             elseif y > 1 and y < 8 then
-                change_track(x)
-                if all_gridSeqs[x]:does_pattern_have_notes(patIndex) then
-                    patLaunchConfig.clipboard_pattern = all_gridSeqs[x]:get_cloned_patern_at_index(patIndex)
+                change_track(x+xOff)
+                if all_gridSeqs[x+xOff]:does_pattern_have_notes(patIndex) then
+                    patLaunchConfig.clipboard_pattern = all_gridSeqs[x+xOff]:get_cloned_patern_at_index(patIndex)
                     if patLaunchConfig.clipboard_pattern ~= nil then
                         show_temporary_notification("Pat "..get_pattern_letter(patIndex).." copied")
                         grid_dirty = true
                     end
                 else
                     if patLaunchConfig.clipboard_pattern ~= nil then
-                        if all_gridSeqs[x]:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, patIndex) then
+                        if all_gridSeqs[x+xOff]:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, patIndex) then
                             -- all_gridSeqs[x]:change_selected_pattern(patIndex)
                             show_temporary_notification("Paste to "..get_pattern_letter(patIndex))
                             grid_dirty = true
@@ -1975,7 +1971,7 @@ function GridPatLaunch.grid_key(x,y,z)
             end
         else -- key released
             if y == 8 then
-                if x == 10 then
+                if x == xCopy then
                     patLaunchConfig.edit_mode = 1
                     grid_dirty = true
                 end
@@ -1985,22 +1981,20 @@ function GridPatLaunch.grid_key(x,y,z)
         if z == 1 then -- key pressed
             if y == 1 then
                 if patLaunchConfig.track_paste_mode == 1 and patLaunchConfig.clipboard_gridKeys ~= nil then
-                    change_track(x)
-                    all_gridKeys[x]:load_serialized(patLaunchConfig.clipboard_gridKeys)
-                    show_temporary_notification("Trk "..x.." settings paste")
+                    change_track(x+xOff)
+                    all_gridKeys[x+xOff]:load_serialized(patLaunchConfig.clipboard_gridKeys)
+                    show_temporary_notification("Trk "..(x+xOff).." settings paste")
                     grid_dirty = true
                 elseif patLaunchConfig.track_paste_mode == 2 and patLaunchConfig.clipboard_gridSeq ~= nil then
-                    change_track(x)
-                    all_gridSeqs[x]:load_serialized(patLaunchConfig.clipboard_gridSeq)
-                    show_temporary_notification("Track "..x.." pasted")
+                    change_track(x+xOff)
+                    all_gridSeqs[x+xOff]:load_serialized(patLaunchConfig.clipboard_gridSeq)
+                    show_temporary_notification("Track "..(x+xOff).." pasted")
                     grid_dirty = true
                 end
-                
-                
             elseif y > 1 and y < 8 then
-                change_track(x)
+                change_track(x+xOff)
                 if patLaunchConfig.clipboard_pattern ~= nil then
-                    if all_gridSeqs[x]:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, patIndex) then
+                    if all_gridSeqs[x+xOff]:paste_pattern_to_index(patLaunchConfig.clipboard_pattern, patIndex) then
                         -- all_gridSeqs[x]:change_selected_pattern(patIndex)
                         show_temporary_notification("Paste to "..get_pattern_letter(patIndex))
                         grid_dirty = true
@@ -2009,7 +2003,7 @@ function GridPatLaunch.grid_key(x,y,z)
             end
         else -- key released
             if y == 8 then
-                if x == 11 then
+                if x == xPaste then
                     patLaunchConfig.edit_mode = 1
                     grid_dirty = true
                 end
@@ -2017,14 +2011,18 @@ function GridPatLaunch.grid_key(x,y,z)
         end
     end
 
-    if GridPatLaunch.heldPattern ~= nil then
-        if x == GridPatLaunch.heldPattern.x and y == GridPatLaunch.heldPattern.y and z == 0 then
-            GridPatLaunch.heldPattern = nil
-        end
-    end
+    grid_key_toolbar(x,y,z)
 
-    if grid_dirty then
-        grid_redraw()
+    if GridPatLaunch.heldPattern ~= nil then
+        if gridType == gridType_128 then
+            if x == GridPatLaunch.heldPattern.x and y == GridPatLaunch.heldPattern.y and z == 0 then
+                GridPatLaunch.heldPattern = nil
+            end
+        elseif gridType == gridType_64 then
+            if (x == GridPatLaunch.heldPattern.x or x+8 == GridPatLaunch.heldPattern.x) and y == GridPatLaunch.heldPattern.y and z == 0 then
+                GridPatLaunch.heldPattern = nil
+            end
+        end
     end
 end
 
@@ -2033,67 +2031,76 @@ function seq_newStep()
 end
 
 -- grid step edit mode
-function draw_step_edit(stepId)
+function grid_draw_step_edit(stepId)
     stepId = stepId or gridSeq:get_current_stepId()
     local cX = 8
     local cY = 5
+
+    if gridType == gridType_64 then
+        cX = 4
+    end
 
     local stepHasNotes = gridSeq:does_stepId_have_notes()
 
     local ledBrightness = stepHasNotes and 3 or 1
 
-    for y = cY-2,cY-1 do
-        g:led(cX,y,ledBrightness)
-        g:led(cX-7,y,ledBrightness)
-        g:led(cX+8,y,ledBrightness)
-    end
+    if gridType == gridType_128 then
+        for y = cY-2,cY-1 do
+            g:led(cX,y,ledBrightness)
+            g:led(cX-7,y,ledBrightness)
+            g:led(cX+8,y,ledBrightness)
+        end
 
-    for x = cX-7,cX+8 do
-        g:led(x,cY,ledBrightness)
-    end
+        for x = cX-7,cX+8 do
+            g:led(x,cY,ledBrightness)
+        end
+    
+        for x = 0,7 do
+            if x % 2 == 0 then
+                g:led(cX + x,cY-1,ledBrightness)
+                g:led(cX - x,cY-1,ledBrightness)
+            end
+        end
+    
+        local offset = gridSeq:get_stepId_offset(stepId)
+        local substepCount = gridSeq:get_substep_count(stepId)
+    
+        local offsetX = util.clamp(cX + util.round(util.linlin(-substepCount,substepCount,-8,8, offset)),1,16)
+    
+        ledBrightness = stepHasNotes and 15 or 3
+    
+        for y = cY-2,cY do
+            g:led(offsetX,y,ledBrightness)
+        end
+    elseif gridType == gridType_64 then
+        for y = cY-2,cY-1 do
+            g:led(cX,y,ledBrightness)
+            g:led(1,y,ledBrightness)
+            g:led(8,y,ledBrightness)
+        end
 
-    for x = 0,7 do
-        if x % 2 == 0 then
-            g:led(cX + x,cY-1,ledBrightness)
-            g:led(cX - x,cY-1,ledBrightness)
+        for x = cX-3,cX+4 do
+            g:led(x,cY,ledBrightness)
+        end
+    
+        for x = 0,3 do
+            if x % 2 == 0 then
+                g:led(cX + x,cY-1,ledBrightness)
+                g:led(cX - x,cY-1,ledBrightness)
+            end
+        end
+    
+        local offset = gridSeq:get_stepId_offset(stepId)
+        local substepCount = gridSeq:get_substep_count(stepId)
+    
+        local offsetX = util.clamp(cX + util.round(util.linlin(-substepCount,substepCount,-4,4, offset)),1,8)
+    
+        ledBrightness = stepHasNotes and 15 or 3
+    
+        for y = cY-2,cY do
+            g:led(offsetX,y,ledBrightness)
         end
     end
-
-    local offset = gridSeq:get_stepId_offset(stepId)
-    local substepCount = gridSeq:get_substep_count(stepId)
-
-    local offsetX = util.clamp(cX + util.round(util.linlin(-substepCount,substepCount,-8,8, offset)),1,16)
-
-    -- if offset >= 0 then
-    --     offsetX = cX + util.round(util.linlin(0,substepCount,0,8,offset))
-    --     -- print("offset "..offset.." substepCount "..substepCount.." offsetX "..offsetX)
-    -- else
-    --     offsetX = cX + util.round(util.linlin(0,substepCount,0,8,offset))
-
-    -- end
-
-    ledBrightness = stepHasNotes and 15 or 3
-
-    for y = cY-2,cY do
-        g:led(offsetX,y,ledBrightness)
-    end
-
-
-    -- if not gridSeq.triplet_mode then
-    --     g:led()
-    -- else
-    -- end
-
-
-
-    -- PageMicroTiming.offsetSlider.value_labels = gridSeq.triplet_mode and PageMicroTiming.triplet_value_labels or PageMicroTiming.normal_value_labels
-    -- PageMicroTiming.offsetSlider.substep_count = gridSeq:get_substep_count()
-    -- PageMicroTiming.offsetSlider.value = gridSeq:get_stepId_offset(gridSeq:get_current_stepId())
-    -- PageMicroTiming.offsetSlider.min_value = -gridSeq:get_substep_count()
-    -- PageMicroTiming.offsetSlider.max_value = gridSeq:get_substep_count()
-
-
-
 end
 
 function grid_key_step_edit(x, y, z, stepId)
@@ -2103,14 +2110,25 @@ function grid_key_step_edit(x, y, z, stepId)
 
     if z == 1 then
         if y >= 3 and z <= 6 then
-            local substep_count = gridSeq:get_substep_count(stepId)
+            if gridType == gridType_128 then
+                local substep_count = gridSeq:get_substep_count(stepId)
 
-            local offset = util.round(util.linlin(-8, 8, -substep_count, substep_count, x - 8))
-            if x == 1 then offset = -substep_count end
+                local offset = util.round(util.linlin(-8, 8, -substep_count, substep_count, x - 8))
+                if x == 1 then offset = -substep_count end
 
-            -- print("substep_count "..substep_count.." offset "..offset)
-            gridSeq:set_stepId_offset(stepId, offset)
-            grid_dirty = true
+                -- print("substep_count "..substep_count.." offset "..offset)
+                gridSeq:set_stepId_offset(stepId, offset)
+                grid_dirty = true
+            elseif gridType == gridType_64 then
+                local substep_count = gridSeq:get_substep_count(stepId)
+
+                local offset = util.round(util.linlin(-4, 4, -substep_count, substep_count, x - 4))
+                if x == 1 then offset = -substep_count end
+
+                -- print("substep_count "..substep_count.." offset "..offset)
+                gridSeq:set_stepId_offset(stepId, offset)
+                grid_dirty = true
+            end
         end
     else
     end
@@ -2118,34 +2136,90 @@ function grid_key_step_edit(x, y, z, stepId)
     return grid_dirty
 end
 
-function draw_bars_and_tracks()
+function grid_draw_bars_and_tracks()
 
-    draw_sequence_steps(true, true, 2, false, false)
+    grid_draw_sequence_steps(true, true, 2, false, false)
 
-    for x = 1, gridSeq.num_bars do
+    if gridType == gridType_128 then
+        for x = 1, gridSeq.num_bars do
 
-        local has_notes = gridSeq:does_bar_have_notes(x)
+            local has_notes = gridSeq:does_bar_have_notes(x)
+    
+            g:led(x, 3, has_notes and 5 or 2)
+            g:led(x, 4, has_notes and 5 or 2)
+        end
+    
+        g:led(gridSeq.selected_bar, 4, mode_on_brightness)
+    
+        for x = 1, 16 do
+            g:led(x, 5, gridSeq:does_pattern_have_notes(x) and 5 or 2)
+        end
+    
+        g:led(gridSeq.selected_pattern , 5, mode_on_brightness)
+    
+        for x = 1, 16 do
+            g:led(x, 7, 2)
+        end
+    
+        g:led(track, 7, mode_on_brightness)
+    elseif gridType == gridType_64 then
+        local xOff = 0
 
-        g:led(x, 3, has_notes and 5 or 2)
-        g:led(x, 4, has_notes and 5 or 2)
+        if edit_steps_9_16 then
+            xOff = 8
+            -- for x = 9, gridSeq.num_bars do
+
+            --     local has_notes = gridSeq:does_bar_have_notes(x)
+        
+            --     g:led(x-8, 3, has_notes and 5 or 2)
+            --     g:led(x-8, 4, has_notes and 5 or 2)
+            -- end
+        else
+            -- for x = 1, math.min(gridSeq.num_bars, 8) do
+
+            --     local has_notes = gridSeq:does_bar_have_notes(x)
+        
+            --     g:led(x, 3, has_notes and 5 or 2)
+            --     g:led(x, 4, has_notes and 5 or 2)
+            -- end
+        end
+
+        for x = 1, math.min(gridSeq.num_bars-xOff, 8) do
+
+            local has_notes = gridSeq:does_bar_have_notes(x+xOff)
+    
+            g:led(x, 3, has_notes and 5 or 2)
+            g:led(x, 4, has_notes and 5 or 2)
+        end
+    
+        if gridSeq.selected_bar-xOff > 0 and gridSeq.selected_bar-xOff <= 8 then
+            g:led(gridSeq.selected_bar-xOff, 4, mode_on_brightness)
+        end
+    
+        for x = 1, 8 do
+            g:led(x, 5, gridSeq:does_pattern_have_notes(x+xOff) and 5 or 2)
+        end
+    
+        if gridSeq.selected_pattern-xOff > 0 and gridSeq.selected_pattern-xOff <= 8 then
+            g:led(gridSeq.selected_pattern-xOff, 5, mode_on_brightness)
+        end
+    
+        for x = 1, 8 do
+            g:led(x, 7, 2)
+        end
+    
+        if track-xOff > 0 and track-xOff <= 8 then
+            g:led(track-xOff, 7, mode_on_brightness)
+        end
     end
-
-    g:led(gridSeq.selected_bar, 4, mode_on_brightness)
-
-    for x = 1, 16 do
-        g:led(x, 5, gridSeq:does_pattern_have_notes(x) and 5 or 2)
-    end
-
-    g:led(gridSeq.selected_pattern , 5, mode_on_brightness)
-
-    for x = 1, 16 do
-        g:led(x, 7, 2)
-    end
-
-    g:led(track, 7, mode_on_brightness)
 end
 
-function draw_sequence_steps(highlight_selected_step, highlight_quarter_notes, y_pos, show_bar, show_selected_step)
+function grid_draw_sequence_steps(highlight_selected_step, highlight_quarter_notes, y_pos, show_bar, show_selected_step)
+    if gridType == gridType_64 then
+        grid_draw_sequence_steps_64(highlight_selected_step, highlight_quarter_notes, y_pos, show_bar, show_selected_step)
+        return
+    end
+
     y_pos = y_pos or 1
     highlight_selected_step = highlight_selected_step or false
     highlight_quarter_notes = highlight_quarter_notes or false
@@ -2191,6 +2265,61 @@ function draw_sequence_steps(highlight_selected_step, highlight_quarter_notes, y
     end
 end
 
+function grid_draw_sequence_steps_64(highlight_selected_step, highlight_quarter_notes, y_pos, show_bar, show_selected_step)
+    y_pos = y_pos or 1
+    highlight_selected_step = highlight_selected_step or false
+    highlight_quarter_notes = highlight_quarter_notes or false
+    show_bar = show_bar == nil and true or show_bar
+    show_selected_step = show_selected_step == nil and (gridSeq.edit_mode == seqmode_select and not shift_down) or show_selected_step
+
+    local seq_position = gridSeq.stepIndex_to_stepId(gridSeq.position + 1)
+    local seq_selectedStep = gridSeq.stepIndex_to_stepId(gridSeq.current_step)
+
+    local xOff = 0
+    local startX = 1
+    local endX = math.min(gridSeq.bar_length,8)
+    if edit_steps_9_16 then 
+        xOff = 8 
+        startX = 9
+        endX = gridSeq.bar_length
+    end
+
+    -- local seq_position = math.floor(gridSeq.position / 4) 
+    -- if seq_position == 0 then seq_position = 16 end
+
+    -- draw pattern steps
+    for x = startX, endX do
+        local step_seq_bright = 0
+
+        if highlight_quarter_notes then
+            step_seq_bright = (x % 4 == 1) and 3 or 2
+        end
+
+        if highlight_selected_step then
+            -- if seq_selectedStep == x and gridSeq.edit_mode == seqmode_select and not shift_down then -- dont highlight selected step if in cut,copy, or paste modes
+            if show_selected_step and seq_selectedStep == x then -- dont highlight selected step if in cut,copy, or paste modes
+                step_seq_bright = gridSeq:get_stepId_mute(x) and 12 or 15
+            elseif gridSeq.is_playing and seq_position == x  then 
+                step_seq_bright = 15
+            elseif gridSeq:does_stepId_have_notes(x) then 
+                step_seq_bright = gridSeq:get_stepId_mute(x) and 0 or 9
+            else
+                step_seq_bright = gridSeq:get_stepId_mute(x) and 0 or step_seq_bright
+            end
+        else
+            if gridSeq.is_playing and seq_position == x  then 
+                step_seq_bright = 15
+            end
+        end
+
+        if show_bar and gridSeq.is_playing and x == gridSeq.play_bar_position then
+            step_seq_bright = blink_on and math.max(step_seq_bright, 6) or 2
+        end
+
+        g:led(x-xOff,y_pos,step_seq_bright)
+    end
+end
+
 function grid_draw_image(image, brightness, xOff, yOff)
     xOff = xOff or 0
     yOff = yOff or 1
@@ -2202,74 +2331,43 @@ function grid_draw_image(image, brightness, xOff, yOff)
 end
 
 function grid_redraw()
-    -- g:all(0)
-    -- grid_draw_image(gridImage_paste, 8)
-    -- g:refresh()
-
     current_grid_page.grid_redraw()
+end
 
+function grid_draw_toolbar()
+     -- Toolbar
+     local toolY = 8
 
-    -- g:all(0)
+     if gridSeq.record then
+         if is_playing then 
+             g:led(1,toolY,blink_on and 12 or 0)
+         else
+             g:led(1,toolY,blink_on and 8 or 0)
+         end
+     else
+         g:led(1,toolY,gridSeq.is_playing and 12 or 2)
+     end
+     g:led(2,toolY, shift_down and 15 or shift_brightness) -- shift
+ 
+     -- g:led(2,toolY,gridSeq.record and 12 or 2)
+     -- g:led(2,toolY,gridKeys.layout_mode == 1 and mode_on_brightness or mode_off_brightness)
 
-    -- -- velocity meter
-    -- if gridSeq.step_edit then
-    --     local vel_steps = util.round(util.linlin(1,127,0,5,config.note_velocity))
+     if gridType == gridType_128 then
+        g:led(3,toolY, mode_on_brightness) -- play mode active
+        g:led(4,toolY, mode_off_brightness) -- pat launch mode not active
+        g:led(5,toolY, mode_off_brightness) -- step mode not active
+     elseif gridType == gridType_64 then
+        g:led(3,toolY, mode_on_brightness)
 
-    --     for y = 0,vel_steps do
-    --         g:led(1, 7-y, 8)
-    --     end
-
-    --     -- g:led(gridSeq.current_step, 1, 15)
-    -- else
-    --     local vel_steps = util.round(util.linlin(1,127,0,6,config.note_velocity))
-
-    --     for y = 0,vel_steps do
-    --         g:led(1, 7-y, 8)
-    --     end
-    -- end
-
-    -- if gridSeq.step_edit then
-    --     for x =1,16 do
-    --         local step_seq_bright = (x % 4 == 1) and 3 or 2
-
-    --         if gridSeq.current_step == x then
-    --             step_seq_bright = 15
-    --         elseif gridSeq.is_playing and gridSeq.position == x then 
-    --             step_seq_bright = 15
-    --         elseif gridSeq:does_step_have_notes(x) then 
-    --             step_seq_bright = 9 
-    --         end
-
-    --         g:led(x,1,step_seq_bright)
-    --     end
-    -- end
-
-    -- -- if gridSeq.is_playing then
-    -- --     g:led(gridSeq.position,1,12)
-    -- -- end
-
-    -- -- Toolbar
-    -- -- g:led(1,8,sequence_playing and 12 or 2)
-    -- local toolY = 8
-    -- g:led(1,toolY,gridSeq.is_playing and 12 or 2)
-    -- g:led(2,toolY,gridKeys.layout_mode == 1 and 12 or 8)
-    -- g:led(3,toolY,gridKeys.layout_mode == 2 and 12 or 8)
-
-    -- g:led(5,toolY, gridSeq.step_edit and 12 or 8) -- grid down
-
-    -- if gridSeq.step_edit then
-    --     g:led(7,toolY, gridSeq.edit_mode == seqmode_delete and 15 or 8) -- grid down
-    -- end
-
-    -- g:led(15,toolY,8) -- grid down
-    -- g:led(16,toolY,8) -- grid up
-
-    -- gridKeys:draw_grid(g)
-    -- g:refresh()
+        g:led(7,toolY, edit_steps_9_16 and mode_off_brightness or mode_on_brightness)
+        g:led(8,toolY, edit_steps_9_16 and mode_on_brightness or mode_off_brightness)
+     end
 end
 
 function GridPlay.grid_redraw()
     g:all(0)
+
+    grid_draw_toolbar()
 
     -- velocity meter
     -- local vel_steps = util.round(util.linlin(1,127,0,6,config.note_velocity))
@@ -2277,74 +2375,93 @@ function GridPlay.grid_redraw()
     --     g:led(1, 7-y, 8)
     -- end
 
-    
-
     -- Toolbar
     local toolY = 8
 
-    if gridSeq.record then
-        if is_playing then 
-            g:led(1,toolY,blink_on and 12 or 0)
+    if gridType == gridType_128 then
+        g:led(13,toolY,gridKeys.layout_mode == 2 and mode_on_brightness or mode_off_brightness)
+        g:led(14,toolY,gridKeys.enable_note_highlighting and mode_on_brightness or mode_off_brightness)
+
+        g:led(15,toolY, mode_off_brightness) -- grid down
+        g:led(16,toolY, mode_off_brightness) -- grid up
+
+        if confirm_delete then
+            grid_draw_image(gridImage_x, 8, 5, 1)
+        elseif shift_down then
+            grid_draw_sequence_steps(true, true, 1) 
+            grid_draw_bars_and_tracks()
         else
-            g:led(1,toolY,blink_on and 8 or 0)
+            gridKeys:draw_grid(g)
+            draw_meters = true
         end
-    else
-        g:led(1,toolY,gridSeq.is_playing and 12 or 2)
-    end
-    g:led(2,toolY, shift_down and 15 or shift_brightness) -- shift
-
-    -- g:led(2,toolY,gridSeq.record and 12 or 2)
-    -- g:led(2,toolY,gridKeys.layout_mode == 1 and mode_on_brightness or mode_off_brightness)
     
-    g:led(3,toolY, mode_on_brightness) -- play mode active
-    g:led(4,toolY, mode_off_brightness) -- pat launch mode not active
-    g:led(5,toolY, mode_off_brightness) -- step mode not active
-
+        -- draw pattern steps
+        if gridSeq.is_playing and gridKeys.enable_note_highlighting then
+            local seq_position = gridSeq.stepIndex_to_stepId(gridSeq.position + 1)
     
+            if gridSeq.play_bar_position == seq_position then
+                local bar_led = blink_on and 12 or 0
+    
+                g:led(gridSeq.play_bar_position,1,bar_led)
+            else
+                local bar_led = blink_on and 6 or 0
+    
+                g:led(gridSeq.play_bar_position,1,bar_led)
+                g:led(seq_position,1,12)
+            end
+        end
+    elseif gridType == gridType_64 then
+        g:led(5,toolY,gridKeys.layout_mode == 2 and mode_on_brightness or mode_off_brightness)
+        g:led(6,toolY,gridKeys.enable_note_highlighting and mode_on_brightness or mode_off_brightness)
 
-    g:led(13,toolY,gridKeys.layout_mode == 2 and mode_on_brightness or mode_off_brightness)
-    g:led(14,toolY,gridKeys.enable_note_highlighting and mode_on_brightness or mode_off_brightness)
-
-    g:led(15,toolY, mode_off_brightness) -- grid down
-    g:led(16,toolY, mode_off_brightness) -- grid up
-
-    if confirm_delete then
-        grid_draw_image(gridImage_x, 8, 5, 1)
-    elseif shift_down then
-        draw_sequence_steps(true, true, 1) 
-        draw_bars_and_tracks()
-    else
-        gridKeys:draw_grid(g)
-        draw_meters = true
-    end
-
-    -- draw pattern steps
-    if gridSeq.is_playing and gridKeys.enable_note_highlighting then
-        local seq_position = gridSeq.stepIndex_to_stepId(gridSeq.position + 1)
-        
-
-        if gridSeq.play_bar_position == seq_position then
-            local bar_led = blink_on and 12 or 0
-
-            g:led(gridSeq.play_bar_position,1,bar_led)
+        if confirm_delete then
+            grid_draw_image(gridImage_x, 8, 1, 1)
+        elseif shift_down then
+            grid_draw_sequence_steps(true, true, 1) 
+            grid_draw_bars_and_tracks()
         else
-            local bar_led = blink_on and 6 or 0
-
-            g:led(gridSeq.play_bar_position,1,bar_led)
-            g:led(seq_position,1,12)
+            gridKeys:draw_grid(g)
+            draw_meters = true
+            g:led(7,7, mode_off_brightness) -- grid down
+            g:led(8,7, mode_off_brightness) -- grid up
         end
-        
-        
-        
+    
+        -- draw pattern steps
+        if gridSeq.is_playing and gridKeys.enable_note_highlighting then
+            local seq_position = gridSeq.stepIndex_to_stepId(gridSeq.position + 1)
+    
+            if gridSeq.play_bar_position == seq_position then
+                local bar_led = blink_on and 12 or 0
 
-        -- local seq_position = math.floor(gridSeq.position / 4) 
-        -- if seq_position == 0 then seq_position = 16 end
+                if edit_steps_9_16 then
+                    if gridSeq.play_bar_position > 8 then
+                        g:led(gridSeq.play_bar_position-8,1,bar_led)
+                    end
+                else
+                    if gridSeq.play_bar_position <= 8 then
+                        g:led(gridSeq.play_bar_position,1,bar_led)
+                    end
+                end
+            else
+                local bar_led = blink_on and 6 or 0
 
-        -- for x =1,16 do
-        --     if gridSeq.is_playing and seq_position == x  then 
-        --         g:led(x,1,12)
-        --     end
-        -- end
+                if edit_steps_9_16 then
+                    if gridSeq.play_bar_position > 8 then
+                        g:led(gridSeq.play_bar_position-8,1,bar_led)
+                    end
+                    if seq_position > 8 then
+                        g:led(seq_position-8,1,12)
+                    end
+                else
+                    if gridSeq.play_bar_position <= 8 then
+                        g:led(gridSeq.play_bar_position,1,bar_led)
+                    end
+                    if seq_position <=8 then
+                        g:led(seq_position,1,12)
+                    end
+                end
+            end
+        end
     end
 
     g:refresh()
@@ -2353,49 +2470,86 @@ end
 function GridSeq.grid_redraw()
     g:all(0)
 
+    grid_draw_toolbar()
+
     local draw_meters = false
 
-    draw_sequence_steps(true, true, 1) 
+    local xOff = 0
+    local xCut = 9
+    local xCopy = 10
+    local xPaste = 11
+
+    if gridType == gridType_64 then
+        xCut = 4
+        xCopy = 5
+        xPaste = 6
+        if edit_steps_9_16 then
+            xOff = 8
+        end
+    end
+
+    grid_draw_sequence_steps(true, true, 1) 
 
     if GridSeq.show_step_edit then
-        draw_step_edit()
+        grid_draw_step_edit()
     else
         -- draw toolbar
         local toolY = 8
-        g:led(1,toolY,gridSeq.is_playing and 12 or 2)
-        g:led(2,toolY, shift_down and 15 or shift_brightness) -- shift
+        -- g:led(1,toolY,gridSeq.is_playing and 12 or 2)
+        -- g:led(2,toolY, shift_down and 15 or shift_brightness) -- shift
 
-        g:led(3,toolY, mode_off_brightness) -- play mode not active
-        g:led(4,toolY, mode_off_brightness) -- pat launch mode not active
-        g:led(5,toolY, mode_on_brightness) -- step mode active
+        -- g:led(3,toolY, mode_off_brightness) -- play mode not active
+        -- g:led(4,toolY, mode_off_brightness) -- pat launch mode not active
+        -- g:led(5,toolY, mode_on_brightness) -- step mode active
         
-        g:led(9,toolY, gridSeq.edit_mode == seqmode_cut and 15 or mode_off_brightness) -- cut
-        g:led(10,toolY, gridSeq.edit_mode == seqmode_copy and 15 or mode_off_brightness) -- copy
-        g:led(11,toolY, gridSeq.edit_mode == seqmode_paste and 15 or mode_off_brightness) -- paste
+        g:led(xCut,toolY, gridSeq.edit_mode == seqmode_cut and 15 or mode_off_brightness) -- cut
+        g:led(xCopy,toolY, gridSeq.edit_mode == seqmode_copy and 15 or mode_off_brightness) -- copy
+        g:led(xPaste,toolY, gridSeq.edit_mode == seqmode_paste and 15 or mode_off_brightness) -- paste
 
-        g:led(13,toolY, 4) -- shift
-        g:led(14,toolY, 4) -- shift
+        if gridType == gridType_128 then
+            g:led(13,toolY, 4) -- shift left
+            g:led(14,toolY, 4) -- shift right
 
-        g:led(15,toolY, 6) -- grid down
-        g:led(16,toolY, 6) -- grid up
+            g:led(15,toolY, 6) -- grid down
+            g:led(16,toolY, 6) -- grid up
 
+            if confirm_delete then
+                grid_draw_image(gridImage_x, 8, 5, 1)
+            elseif shift_down then
+                grid_draw_bars_and_tracks()
+            elseif gridSeq.edit_mode == seqmode_select then
+                gridKeys:draw_grid(g)
+                draw_meters = true
+            elseif gridSeq.edit_mode == seqmode_cut then
+                grid_draw_bars_and_tracks()
+                -- grid_draw_image(gridImage_cut, 8)
+            elseif gridSeq.edit_mode == seqmode_copy then
+                grid_draw_bars_and_tracks()
+                -- grid_draw_image(gridImage_copy, 8)
+            elseif gridSeq.edit_mode == seqmode_paste then
+                grid_draw_bars_and_tracks()
+                -- grid_draw_image(gridImage_paste, 8)
+            end
+        elseif gridType == gridType_64 then
+            if confirm_delete then
+                grid_draw_image(gridImage_x, 8, 1, 1)
+            elseif shift_down then
+                grid_draw_bars_and_tracks()
+            elseif gridSeq.edit_mode == seqmode_select then
+                gridKeys:draw_grid(g)
+            elseif gridSeq.edit_mode == seqmode_cut then
+                grid_draw_bars_and_tracks()
+                -- grid_draw_image(gridImage_cut, 8)
+            elseif gridSeq.edit_mode == seqmode_copy then
+                grid_draw_bars_and_tracks()
+                -- grid_draw_image(gridImage_copy, 8)
+            elseif gridSeq.edit_mode == seqmode_paste then
+                grid_draw_bars_and_tracks()
+                -- grid_draw_image(gridImage_paste, 8)
+            end
 
-        if confirm_delete then
-            grid_draw_image(gridImage_x, 8, 5, 1)
-        elseif shift_down then
-            draw_bars_and_tracks()
-        elseif gridSeq.edit_mode == seqmode_select then
-            gridKeys:draw_grid(g)
-            draw_meters = true
-        elseif gridSeq.edit_mode == seqmode_cut then
-            draw_bars_and_tracks()
-            -- grid_draw_image(gridImage_cut, 8)
-        elseif gridSeq.edit_mode == seqmode_copy then
-            draw_bars_and_tracks()
-            -- grid_draw_image(gridImage_copy, 8)
-        elseif gridSeq.edit_mode == seqmode_paste then
-            draw_bars_and_tracks()
-            -- grid_draw_image(gridImage_paste, 8)
+            g:led(7,7, 6) -- grid down
+            g:led(8,7, 6) -- grid up
         end
 
         if draw_meters then
@@ -2426,89 +2580,210 @@ function GridSeq.grid_redraw()
     g:refresh()
 end
 
-function GridSeqVel.grid_redraw()
+function grid_draw_param_edit(edit_type)
     g:all(0)
 
+    local xWidth = 16
+    local xOff = 0
+    local xCut = 9
+    local xCopy = 10
+    local xPaste = 11
+
+    if gridType == gridType_64 then
+        xWidth = 8
+        xCut = 4
+        xCopy = 5
+        xPaste = 6
+        if edit_steps_9_16 then
+            xOff = 8
+        end
+    end
+
     -- velocity meters
-    for x = 1,16 do
-        if gridSeq:does_stepId_have_notes(x) then
-            -- g:led(x,1,9)
+    for x = 1,xWidth do
+        if gridSeq:does_stepId_have_notes(x+xOff) then
+            if edit_type == 1 then -- velocity
+                -- g:led(x,1,9)
 
-            local vel_steps = util.round(util.linlin(1,127,0,5,gridSeq:get_stepId_velocity(x)))
+                local vel_steps = util.round(util.linlin(1,127,0,5,gridSeq:get_stepId_velocity(x+xOff)))
 
-            local led_brightness = x > gridSeq.bar_length and 3 or 8
+                local led_brightness = x+xOff > gridSeq.bar_length and 3 or 8
 
-            for y = 0,vel_steps do
-                g:led(x, 7-y, led_brightness)
+                for y = 0,vel_steps do
+                    g:led(x, 7-y, led_brightness)
+                end
+            elseif edit_type == 2 then -- note lengths
+                local stepNoteLength = gridSeq:get_stepId_note_length(x+xOff)
+                local note_steps = 0
+
+                for i = 1, #seq_noteLengths do
+                    if stepNoteLength > seq_noteLengths[i] then
+                        note_steps = note_steps + 1
+                    end
+                end
+
+                local led_brightness = x > gridSeq.bar_length and 3 or 8
+
+                for y = 0,note_steps do
+                    g:led(x, 7-y, led_brightness)
+                end
             end
         end
     end
 
-    draw_sequence_steps(true, true, 1)
+    grid_draw_sequence_steps(true, true, 1)
 
     -- draw toolbar
     local toolY = 8
-    g:led(1,toolY,mode_off_brightness)
-    g:led(3,toolY,mode_on_brightness)
-    g:led(4,toolY,mode_off_brightness)
-    g:led(5,toolY,mode_off_brightness)
 
-    g:led(9,toolY, gridSeq.edit_mode == seqmode_cut and 15 or mode_off_brightness) -- cut
-    g:led(10,toolY, gridSeq.edit_mode == seqmode_copy and 15 or mode_off_brightness) -- copy
-    g:led(11,toolY, gridSeq.edit_mode == seqmode_paste and 15 or mode_off_brightness) -- paste
+    if gridType == gridType_128 then
+        g:led(1,toolY,mode_off_brightness)
+        g:led(3,toolY,edit_type == 1 and mode_on_brightness or mode_off_brightness)
+        g:led(4,toolY,edit_type == 2 and mode_on_brightness or mode_off_brightness)
+        g:led(5,toolY,edit_type == 3 and mode_on_brightness or mode_off_brightness)
+    elseif gridType == gridType_64 then
+        g:led(1,toolY,mode_off_brightness)
+        g:led(3,toolY,mode_on_brightness)
+
+        g:led(7,toolY, edit_steps_9_16 and mode_off_brightness or mode_on_brightness)
+        g:led(8,toolY, edit_steps_9_16 and mode_on_brightness or mode_off_brightness)
+    end
+
+    g:led(xCut,toolY, gridSeq.edit_mode == seqmode_cut and 15 or mode_off_brightness) -- cut
+    g:led(xCopy,toolY, gridSeq.edit_mode == seqmode_copy and 15 or mode_off_brightness) -- copy
+    g:led(xPaste,toolY, gridSeq.edit_mode == seqmode_paste and 15 or mode_off_brightness) -- paste
 
     g:refresh()
 end
 
+function GridSeqVel.grid_redraw()
+    grid_draw_param_edit(1)
+    -- g:all(0)
+
+    -- local xWidth = 16
+    -- local xOff = 0
+    -- local xCut = 9
+    -- local xCopy = 10
+    -- local xPaste = 11
+
+    -- if gridType == gridType_64 then
+    --     xWidth = 8
+    --     xCut = 4
+    --     xCopy = 5
+    --     xPaste = 6
+    --     if edit_steps_9_16 then
+    --         xOff = 8
+    --     end
+    -- end
+
+    -- -- velocity meters
+    -- for x = 1,xWidth do
+    --     if gridSeq:does_stepId_have_notes(x+xOff) then
+    --         -- g:led(x,1,9)
+
+    --         local vel_steps = util.round(util.linlin(1,127,0,5,gridSeq:get_stepId_velocity(x+xOff)))
+
+    --         local led_brightness = x+xOff > gridSeq.bar_length and 3 or 8
+
+    --         for y = 0,vel_steps do
+    --             g:led(x, 7-y, led_brightness)
+    --         end
+    --     end
+    -- end
+
+    -- grid_draw_sequence_steps(true, true, 1)
+
+    -- -- draw toolbar
+    -- local toolY = 8
+
+    -- if gridType == gridType_128 then
+    --     g:led(1,toolY,mode_off_brightness)
+    --     g:led(3,toolY,mode_on_brightness)
+    --     g:led(4,toolY,mode_off_brightness)
+    --     g:led(5,toolY,mode_off_brightness)
+    -- elseif gridType == gridType_64 then
+    --     g:led(1,toolY,mode_off_brightness)
+    --     g:led(3,toolY,mode_on_brightness)
+
+    --     g:led(7,toolY, edit_steps_9_16 and mode_off_brightness or mode_on_brightness)
+    --     g:led(8,toolY, edit_steps_9_16 and mode_on_brightness or mode_off_brightness)
+    -- end
+
+    -- g:led(xCut,toolY, gridSeq.edit_mode == seqmode_cut and 15 or mode_off_brightness) -- cut
+    -- g:led(xCopy,toolY, gridSeq.edit_mode == seqmode_copy and 15 or mode_off_brightness) -- copy
+    -- g:led(xPaste,toolY, gridSeq.edit_mode == seqmode_paste and 15 or mode_off_brightness) -- paste
+
+    -- g:refresh()
+end
+
 function GridSeqNoteLengths.grid_redraw()
-    g:all(0)
+    grid_draw_param_edit(2)
 
-    -- velocity meters
-    for x = 1,16 do
-        if gridSeq:does_stepId_have_notes(x) then
-            local stepNoteLength = gridSeq:get_stepId_note_length(x)
-            local note_steps = 0
+    -- g:all(0)
 
-            for i = 1, #seq_noteLengths do
-                if stepNoteLength > seq_noteLengths[i] then
-                    note_steps = note_steps + 1
-                end
-            end
+    -- -- velocity meters
+    -- for x = 1,16 do
+    --     if gridSeq:does_stepId_have_notes(x) then
+    --         local stepNoteLength = gridSeq:get_stepId_note_length(x)
+    --         local note_steps = 0
 
-            local led_brightness = x > gridSeq.bar_length and 3 or 8
+    --         for i = 1, #seq_noteLengths do
+    --             if stepNoteLength > seq_noteLengths[i] then
+    --                 note_steps = note_steps + 1
+    --             end
+    --         end
 
-            for y = 0,note_steps do
-                g:led(x, 7-y, led_brightness)
-            end
-        end
-    end
+    --         local led_brightness = x > gridSeq.bar_length and 3 or 8
+
+    --         for y = 0,note_steps do
+    --             g:led(x, 7-y, led_brightness)
+    --         end
+    --     end
+    -- end
 
   
-    draw_sequence_steps(true, true, 1)
+    -- grid_draw_sequence_steps(true, true, 1)
 
-    -- draw toolbar
-    local toolY = 8
-    g:led(1,toolY,mode_off_brightness)
-    g:led(3,toolY,mode_off_brightness)
-    g:led(4,toolY,mode_on_brightness)
-    g:led(5,toolY,mode_off_brightness)
+    -- -- draw toolbar
+    -- local toolY = 8
+    -- g:led(1,toolY,mode_off_brightness)
+    -- g:led(3,toolY,mode_off_brightness)
+    -- g:led(4,toolY,mode_on_brightness)
+    -- g:led(5,toolY,mode_off_brightness)
 
-    g:led(9,toolY, gridSeq.edit_mode == seqmode_cut and 15 or mode_off_brightness) -- cut
-    g:led(10,toolY, gridSeq.edit_mode == seqmode_copy and 15 or mode_off_brightness) -- copy
-    g:led(11,toolY, gridSeq.edit_mode == seqmode_paste and 15 or mode_off_brightness) -- paste
+    -- g:led(9,toolY, gridSeq.edit_mode == seqmode_cut and 15 or mode_off_brightness) -- cut
+    -- g:led(10,toolY, gridSeq.edit_mode == seqmode_copy and 15 or mode_off_brightness) -- copy
+    -- g:led(11,toolY, gridSeq.edit_mode == seqmode_paste and 15 or mode_off_brightness) -- paste
 
-    g:refresh()
+    -- g:refresh()
 end
 
 function GridPatLaunch.grid_redraw()
     g:all(0)
 
-    for x = 1,16 do
-        local seq = all_gridSeqs[x]
+    local xWidth = 16
+    local xOff = 0
+    local xCut = 9
+    local xCopy = 10
+    local xPaste = 11
 
-        local mute = all_gridSeqs[x].mute_seq
+    if gridType == gridType_64 then
+        xWidth = 8
+        xCut = 4
+        xCopy = 5
+        xPaste = 6
+        if edit_steps_9_16 then
+            xOff = 8
+        end
+    end
 
-        if x == track then
+
+    for x = 1,xWidth do
+        local seq = all_gridSeqs[x+xOff]
+
+        local mute = all_gridSeqs[x+xOff].mute_seq
+
+        if x+xOff == track then
             g:led(x,1, mute and 2 or 15)
         else
             g:led(x,1, mute and 0 or 6)
@@ -2516,7 +2791,7 @@ function GridPatLaunch.grid_redraw()
 
         for y = 2, 7 do
             local patIndex = y-1+patLaunchConfig.y_offset
-            local ledBrightness = patIndex == seq.selected_pattern and (x == track and 15 or (mute and 4 or 9)) or 1
+            local ledBrightness = patIndex == seq.selected_pattern and (x+xOff == track and 15 or (mute and 4 or 9)) or 1
             if seq:does_pattern_have_notes(patIndex) then
                 ledBrightness = math.max((mute and 3 or 5), ledBrightness)
             elseif patIndex > 16 then
@@ -2533,25 +2808,45 @@ function GridPatLaunch.grid_redraw()
         end
     end
 
-    if is_playing then
-        local seq_position = gridSeq.stepIndex_to_stepId(gridSeq.position + 1)
-        g:led(seq_position,1,12)
+    grid_draw_toolbar()
+
+    if gridType == gridType_128 then
+        if is_playing then
+            local seq_position = gridSeq.stepIndex_to_stepId(gridSeq.position + 1)
+            g:led(seq_position,1,12)
+        end
+    
+        local toolY = 8
+    
+        g:led(xCut,toolY, patLaunchConfig.edit_mode == 2 and 15 or mode_off_brightness) -- cut
+        g:led(xCopy,toolY, patLaunchConfig.edit_mode == 3 and 15 or mode_off_brightness) -- copy
+        g:led(xPaste,toolY, patLaunchConfig.edit_mode == 4 and 15 or mode_off_brightness) -- paste
+    
+        g:led(15,toolY, mode_off_brightness) -- grid down
+        g:led(16,toolY, mode_off_brightness) -- grid up
+    elseif gridType == gridType_64 then
+        if is_playing then
+            local seq_position = gridSeq.stepIndex_to_stepId(gridSeq.position + 1)
+            if edit_steps_9_16 then
+                if seq_position > 8 then
+                    g:led(seq_position-8,1,12)
+                end
+            else
+                if seq_position <= 8 then
+                    g:led(seq_position,1,12)
+                end
+            end
+        end
+    
+        local toolY = 8
+    
+        g:led(xCut,toolY, patLaunchConfig.edit_mode == 2 and 15 or mode_off_brightness) -- cut
+        g:led(xCopy,toolY, patLaunchConfig.edit_mode == 3 and 15 or mode_off_brightness) -- copy
+        g:led(xPaste,toolY, patLaunchConfig.edit_mode == 4 and 15 or mode_off_brightness) -- paste
+    
+        -- g:led(15,toolY, mode_off_brightness) -- grid down
+        -- g:led(16,toolY, mode_off_brightness) -- grid up
     end
-
-    local toolY = 8
-    g:led(1,toolY,is_playing and 12 or 2)
-    g:led(2,toolY, shift_down and 15 or shift_brightness) -- shift
-    g:led(3,toolY, mode_off_brightness) -- play mode not active
-    g:led(4,toolY, mode_on_brightness) -- pat launch mode active
-    g:led(5,toolY, mode_off_brightness) -- step mode not active
-
-
-    g:led(9,toolY, patLaunchConfig.edit_mode == 2 and 15 or mode_off_brightness) -- cut
-    g:led(10,toolY, patLaunchConfig.edit_mode == 3 and 15 or mode_off_brightness) -- copy
-    g:led(11,toolY, patLaunchConfig.edit_mode == 4 and 15 or mode_off_brightness) -- paste
-
-    g:led(15,toolY, mode_off_brightness) -- grid down
-    g:led(16,toolY, mode_off_brightness) -- grid up
 
     g:refresh()
 end
