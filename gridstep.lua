@@ -644,7 +644,7 @@ function change_grid_page(newMode)
         gridSeq.edit_mode = seqmode_select
         gridKeys.enable_key_playback = false
         gridSeq:select_step(gridSeq.current_step)
-        show_temporary_notification("Patern Launch")
+        show_temporary_notification("Pattern Launch")
     elseif newMode == "GridSeq" then
         config.grid_page_index = 3
         current_grid_page = grid_pages[config.grid_page_index]
@@ -1848,7 +1848,7 @@ function GridPatLaunch.grid_key(x,y,z)
                 if GridPatLaunch.heldPattern == nil then
                     change_track(x+xOff)
                     all_gridSeqs[x+xOff]:change_selected_pattern(patIndex)
-                    show_temporary_notification("Patern "..get_pattern_letter(all_gridSeqs[x].selected_pattern))
+                    show_temporary_notification("Pattern "..get_pattern_letter(all_gridSeqs[x].selected_pattern))
 
                     GridPatLaunch.heldPattern = {}
                     GridPatLaunch.heldPattern.x = x+xOff
