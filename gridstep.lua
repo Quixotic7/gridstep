@@ -32,7 +32,7 @@ if _GRID_CAPTURE then
     gcap = require 'GridCapture/GridCapture'
 end
 
-local hs = require 'gridstep/lib/halfsecond'
+local hsdelay = require 'gridstep/lib/halfsecond'
 local Q7Util = require 'gridstep/lib/Q7Util'
 local UI = require 'gridstep/lib/Q7UI'
 local Q7GridKeys = require 'gridstep/lib/Q7GridKeys'
@@ -43,7 +43,7 @@ local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.2.2"
+local version_number = "1.2.3"
 
 local g = grid.connect()
 
@@ -228,7 +228,7 @@ function init()
     current_page = pages[config.page_index]
     current_grid_page = grid_pages[config.grid_page_index]
 
-    hs.init()
+    hsdelay.init()
 
     if _MOLLY_ENGINE then
         MollyThePoly.add_params()
@@ -258,6 +258,8 @@ function init()
         end
 
     end
+
+    -- params:set_action("clock_tempo", on_tempo_changed) -- this was a bad idea
 
     -- param_list_util = ParamListUtil.new()
     -- param_list_util.redraw_func = redraw
@@ -457,6 +459,13 @@ function create_new_project()
     -- clock.run(grid_redraw_clock) -- start the grid redraw clock
 end
 
+function on_tempo_changed(newTempo)
+    newTempo = newTempo or clock.get_tempo()
+    -- print("tempo changed to "..newTempo)
+
+    hsdelay.tempo_changed(newTempo)
+end
+
 function kill_all_notes()
     if is_playing then
         clock.transport.stop()
@@ -552,6 +561,9 @@ function clock.transport.start()
     -- id = clock.run(count)
     active_internal_notes = {}
 
+    on_tempo_changed(clock.get_tempo())
+    -- hsdelay.tempo_changed(clock.get_tempo())
+
     for i,seq in pairs(all_gridSeqs) do
         seq:play_start()
     end
@@ -580,6 +592,8 @@ end
 
 function play_sequence()
 
+    local prev_bpm = clock.get_tempo()
+
     -- local beats = clock.get_beats()
     -- local beat_int = math.floor(beats)
     -- local beat_frac = beats % beat_int
@@ -602,6 +616,10 @@ function play_sequence()
         -- print("beats: " .. clock.get_beats())
 
         -- self:clock_step16()
+        if clock.get_tempo() ~= prev_bpm then
+            prev_bpm = clock.get_tempo()
+            on_tempo_changed(prev_bpm)
+        end
 
         for i,seq in pairs(all_gridSeqs) do
             seq:clock_step16()
@@ -3419,9 +3437,55 @@ PageSound.paramUtil = {}
 function PageSound.init()
     PageSound.paramUtil = ParamListUtil.new()
     PageSound.paramUtil.redraw_func = redraw
+
     -- PageSound.paramUtil.start_y = 20
     -- PageSound.paramUtil.display_num = 2
     -- PageSound.paramUtil.scroll_offset = 1
+
+
+    PageSound.paramUtil:add_option("Delay Enabled", 
+        function() return params:get("delay_enabled") == 2 and "on" or "off" end, 
+        function(d,d_raw) 
+            params:delta("delay_enabled", d_raw)
+        end
+    )
+
+    PageSound.paramUtil:add_option("Delay Level", 
+        function() return params:get("delay_level") end, 
+        function(d,d_raw) 
+            params:delta("delay_level", d_raw)
+        end
+    )
+
+    PageSound.paramUtil:add_option("Delay Time", 
+        function() return delay_options.DELAY_TIME[params:get("delay_time")] end, 
+        function(d,d_raw) 
+            params:delta("delay_time", d_raw)
+        end
+    )
+
+    PageSound.paramUtil:add_option("Delay Rate", 
+        function() return params:get("delay_rate") end, 
+        function(d,d_raw) 
+            params:delta("delay_rate", d_raw)
+        end
+    )
+
+    PageSound.paramUtil:add_option("Delay Feedback", 
+        function() return params:get("delay_feedback") end, 
+        function(d,d_raw) 
+            params:delta("delay_feedback", d_raw)
+        end
+    )
+
+    PageSound.paramUtil:add_option("Delay Pan", 
+        function() return params:get("delay_pan") end, 
+        function(d,d_raw) 
+            print("Delay pan")
+            params:delta("delay_pan", d_raw)
+        end
+    )
+
     if _MOLLY_ENGINE then
         PageSound.paramUtil:add_option("Random Lead", nil, nil,
             function(n,z)
@@ -3450,10 +3514,10 @@ function PageSound.init()
     end
 
     if _TIMBER_ENGINE then
-        PageSound.paramUtil:add_option("Coming soon", nil, nil,
-            function(n,z)
-            end
-        )
+        -- PageSound.paramUtil:add_option("Coming soon", nil, nil,
+        --     function(n,z)
+        --     end
+        -- )
     end
 end
 
@@ -3617,6 +3681,8 @@ function PageClock.init()
         function() return params:string("clock_tempo") end,
         function(d,d_raw) 
             params:delta("clock_tempo", d_raw)
+            on_tempo_changed(clock.get_tempo())
+            -- hsdelay.tempo_changed(clock.get_tempo())
         end
     )
 
