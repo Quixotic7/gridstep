@@ -3,8 +3,8 @@
 -- a polyphonic, isomorphic 
 -- grid keyboard sequencer
 
-local _MOLLY_ENGINE = true
-local _TIMBER_ENGINE = false
+local _MOLLY_ENGINE = false
+local _TIMBER_ENGINE = true
 
 local MollyThePoly = nil
 if _MOLLY_ENGINE then
@@ -41,7 +41,7 @@ local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.1.2"
+local version_number = "1.2.1"
 
 local g = grid.connect()
 
@@ -250,9 +250,9 @@ function init()
         params:add_separator()
         for i = 0, NUM_SAMPLES - 1 do
             Timber.add_sample_params(i)
+            Timber.load_sample(i, _path.code .. "/timber/audio/piano-c.wav")
         end
 
-        Timber.load_sample(0, _path.code .. "/timber/audio/piano-c.wav")
     end
 
     -- param_list_util = ParamListUtil.new()
@@ -808,7 +808,7 @@ function grid_note_on(gKeys, noteNum, vel)
             end
 
             if _TIMBER_ENGINE then
-                local sample_id = 0
+                local sample_id = gKeys.midi_channel - 1
                 local voice_id = sample_id * 128 + noteNum
 
                 engine.noteOn(voice_id, music.note_num_to_freq(noteNum), vel / 127, sample_id)
