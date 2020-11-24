@@ -849,7 +849,7 @@ function grid_note_off(gKeys, noteNum)
         end
 
         if _TIMBER_ENGINE then
-            local sample_id = 0
+            local sample_id = gKeys.midi_channel - 1
             local voice_id = sample_id * 128 + noteNum
 
             engine.noteOff(voice_id)
