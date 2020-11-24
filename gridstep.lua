@@ -2,8 +2,23 @@
 --
 -- a polyphonic, isomorphic 
 -- grid keyboard sequencer
-local MollyThePoly = require "molly_the_poly/lib/molly_the_poly_engine"
-engine.name = "MollyThePoly"
+
+local _MOLLY_ENGINE = true
+local _TIMBER_ENGINE = false
+
+local MollyThePoly = nil
+if _MOLLY_ENGINE then
+    MollyThePoly = require "molly_the_poly/lib/molly_the_poly_engine"
+    engine.name = "MollyThePoly"
+end
+
+local Timber = nil
+local NUM_SAMPLES = 16
+
+if _TIMBER_ENGINE then
+    Timber = include("timber/lib/timber_engine")
+    engine.name = "Timber"
+end
 
 local music = require 'musicutil'
 local beatclock = require 'beatclock'
@@ -26,7 +41,7 @@ local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.1.1"
+local version_number = "1.1.2"
 
 local g = grid.connect()
 
@@ -211,8 +226,34 @@ function init()
     current_page = pages[config.page_index]
     current_grid_page = grid_pages[config.grid_page_index]
 
-    MollyThePoly.add_params()
-    MollyThePoly.randomize_params("lead")
+    if _MOLLY_ENGINE then
+        MollyThePoly.add_params()
+        MollyThePoly.randomize_params("lead")
+    end
+
+    if _TIMBER_ENGINE then
+        Timber.sample_changed_callback = function(id)
+            if Timber.samples_meta[id].manual_load then
+                -- Set our own loop point defaults
+                params:set("loop_start_frame_" .. id, util.round(Timber.samples_meta[id].num_frames * 0.2))
+                params:set("loop_end_frame_" .. id, util.round(Timber.samples_meta[id].num_frames * 0.4))
+                
+                -- Set env defaults
+                params:set("amp_env_attack_" .. id, 0.01)
+                params:set("amp_env_sustain_" .. id, 0.8)
+                params:set("amp_env_release_" .. id, 0.4)
+            end
+            -- callback_set_screen_dirty(id)
+        end
+
+        Timber.add_params()
+        params:add_separator()
+        for i = 0, NUM_SAMPLES - 1 do
+            Timber.add_sample_params(i)
+        end
+
+        Timber.load_sample(0, _path.code .. "/timber/audio/piano-c.wav")
+    end
 
     -- param_list_util = ParamListUtil.new()
     -- param_list_util.redraw_func = redraw
@@ -304,22 +345,12 @@ function init()
     clock.run(grid_redraw_clock) -- start the grid redraw clock
 end
 
-function kill_all_notes()
-    if is_playing then
-        clock.transport.stop()
-    end
-    all_midi_notes_off()
-
-    engine.noteOffAll()
-end
-
 function create_new_project()
     if is_playing then
         clock.transport.stop()
     end
     all_midi_notes_off()
-
-    engine.noteOffAll()
+    all_engine_notes_off()
 
     config = {
         page_index = 1,
@@ -365,7 +396,9 @@ function create_new_project()
     current_page = pages[config.page_index]
     current_grid_page = grid_pages[config.grid_page_index]
 
-    MollyThePoly.randomize_params("lead")
+    if _MOLLY_ENGINE then
+        MollyThePoly.randomize_params("lead")
+    end
 
     gridKeys = {}
     gridSeq = {}
@@ -418,6 +451,21 @@ function create_new_project()
 
     -- clock.run(screen_redraw_clock)
     -- clock.run(grid_redraw_clock) -- start the grid redraw clock
+end
+
+function kill_all_notes()
+    if is_playing then
+        clock.transport.stop()
+    end
+    all_midi_notes_off()
+
+    if _TIMBER_ENGINE then
+        engine.noteKillAll()
+    end
+
+    if _MOLLY_ENGINE then
+        all_engine_notes_off()
+    end
 end
 
 function stop()
@@ -521,7 +569,8 @@ function clock.transport.stop()
     if is_playing then
         clock.cancel(play_clock_id)
         is_playing = false
-        engine.noteOffAll()
+
+        all_engine_notes_off()
     end
 end
 
@@ -607,7 +656,7 @@ function change_gridKey_layout()
     gridKeys.layout_mode = (gridKeys.layout_mode == 1) and 2 or 1
 
     if gridKeys.sound_mode == 1 then
-        engine.noteOffAll() -- layout change can cause notes to keep ringing
+        all_engine_notes_off()
     else
         all_midi_notes_off(gridKeys.midi_device)
     end
@@ -754,7 +803,16 @@ function grid_note_on(gKeys, noteNum, vel)
 
             active_internal_notes[noteNum] = n
 
-            engine.noteOn(noteNum, music.note_num_to_freq(noteNum), vel / 127)
+            if _MOLLY_ENGINE then
+                engine.noteOn(noteNum, music.note_num_to_freq(noteNum), vel / 127)
+            end
+
+            if _TIMBER_ENGINE then
+                local sample_id = 0
+                local voice_id = sample_id * 128 + noteNum
+
+                engine.noteOn(voice_id, music.note_num_to_freq(noteNum), vel / 127, sample_id)
+            end
         end
 
         -- if is_playing then
@@ -782,10 +840,20 @@ function grid_note_off(gKeys, noteNum)
     -- print("Note Off: " .. noteNum .. " " .. music.note_num_to_name(noteNum))
 
     if gKeys.sound_mode == 1 then
-        -- if active_internal_notes[noteNum] ~= nil then -- prevent the same note from playing on top of itself
-        --     active_internal_notes[noteNum] = nil
-        -- end
-        engine.noteOff(noteNum)
+        if not is_playing and active_internal_notes[noteNum] ~= nil then -- prevent the same note from playing on top of itself
+            active_internal_notes[noteNum] = nil
+        end
+
+        if _MOLLY_ENGINE then
+            engine.noteOff(noteNum)
+        end
+
+        if _TIMBER_ENGINE then
+            local sample_id = 0
+            local voice_id = sample_id * 128 + noteNum
+
+            engine.noteOff(voice_id)
+        end
     elseif gKeys.sound_mode == 2 then
         local m = midi_devices[gKeys.midi_device]
 
@@ -794,6 +862,16 @@ function grid_note_off(gKeys, noteNum)
             active_midi_notes[gKeys.midi_device][gKeys.midi_channel][noteNum] = nil
         end
         
+    end
+end
+
+function all_engine_notes_off()
+    if _MOLLY_ENGINE then
+        engine.noteOffAll()
+    end
+
+    if _TIMBER_ENGINE then
+        engine.noteOffAll()
     end
 end
 
@@ -1093,7 +1171,7 @@ function GridPlay.grid_key(x,y,z)
                 elseif x == 5 then -- clear sequence
                     if confirm_delete then
                         gridSeq:clear_pattern()
-                        engine.noteOffAll()
+                        all_engine_notes_off()
                         confirm_delete = false
                         clear_notification()
                         show_temporary_notification("Pattern cleared.")
@@ -1293,7 +1371,7 @@ function GridSeq.grid_key(x,y,z)
                 elseif x == 5 then -- clear sequence
                     if confirm_delete then
                         gridSeq:clear_pattern()
-                        engine.noteOffAll()
+                        all_engine_notes_off()
                         confirm_delete = false
                         clear_notification()
                         show_temporary_notification("Pattern cleared.")
@@ -3244,7 +3322,7 @@ function PageScale.init()
                 end
                 all_midi_notes_off()
                 grid_redraw()
-                engine.noteOffAll()
+                all_engine_notes_off()
             end
         end
     )
@@ -3261,7 +3339,7 @@ function PageScale.init()
                 end
                 all_midi_notes_off()
                 grid_redraw()
-                engine.noteOffAll()
+                all_engine_notes_off()
             end
         end
     )
@@ -3340,32 +3418,32 @@ function PageSound.init()
     -- PageSound.paramUtil.start_y = 20
     -- PageSound.paramUtil.display_num = 2
     -- PageSound.paramUtil.scroll_offset = 1
-
-
-    PageSound.paramUtil:add_option("Random Lead", nil, nil,
-        function(n,z)
-            if n == 3 and z == 1 then
-                print("Random lead")
-                MollyThePoly.randomize_params("lead")
+    if _MOLLY_ENGINE then
+        PageSound.paramUtil:add_option("Random Lead", nil, nil,
+            function(n,z)
+                if n == 3 and z == 1 then
+                    print("Random lead")
+                    MollyThePoly.randomize_params("lead")
+                end
             end
-        end
-    )
-    PageSound.paramUtil:add_option("Random Pad", nil, nil,
-        function(n,z)
-            if n == 3 and z == 1 then
-                print("Random pad")
-                MollyThePoly.randomize_params("pad")
+        )
+        PageSound.paramUtil:add_option("Random Pad", nil, nil,
+            function(n,z)
+                if n == 3 and z == 1 then
+                    print("Random pad")
+                    MollyThePoly.randomize_params("pad")
+                end
             end
-        end
-    )
-    PageSound.paramUtil:add_option("Random Perc", nil, nil,
-        function(n,z)
-            if n == 3 and z == 1 then
-                print("Random perc")
-                MollyThePoly.randomize_params("perc")
+        )
+        PageSound.paramUtil:add_option("Random Perc", nil, nil,
+            function(n,z)
+                if n == 3 and z == 1 then
+                    print("Random perc")
+                    MollyThePoly.randomize_params("perc")
+                end
             end
-        end
-    )
+        )
+    end
 end
 
 function PageSound.key(n,z)
@@ -3533,9 +3611,9 @@ function PageClock.init()
 end
 
 function PageClock.key(n,z)
-    if n == 3 and z == 1 then
-        MollyThePoly.randomize_params("lead")
-    end
+    -- if n == 3 and z == 1 then
+    --     MollyThePoly.randomize_params("lead")
+    -- end
 end
 function PageClock.enc(n,d)
     PageClock.paramUtil:enc(n,d)
