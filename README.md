@@ -36,6 +36,7 @@
 documentation for **gridstep** can be found [here](doc/README.md).
 
 ### changelog
+**v1.2.3** - Added beat synced delay based on halfsecond from awake.
 
 **v1.2.1** - Changed the sound engine to Timber. No UI yet, use the params menu to change sounds. There are 16 sound slots which are currently mapped to a track's midi channel parameter. 
 
