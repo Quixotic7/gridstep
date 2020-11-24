@@ -23,6 +23,7 @@ end
 local music = require 'musicutil'
 local beatclock = require 'beatclock'
 
+
 _GRID_CAPTURE = false
 
 local gcap = nil
@@ -31,6 +32,7 @@ if _GRID_CAPTURE then
     gcap = require 'GridCapture/GridCapture'
 end
 
+local hs = require 'gridstep/lib/halfsecond'
 local Q7Util = require 'gridstep/lib/Q7Util'
 local UI = require 'gridstep/lib/Q7UI'
 local Q7GridKeys = require 'gridstep/lib/Q7GridKeys'
@@ -41,7 +43,7 @@ local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.2.1"
+local version_number = "1.2.2"
 
 local g = grid.connect()
 
@@ -225,6 +227,8 @@ function init()
 
     current_page = pages[config.page_index]
     current_grid_page = grid_pages[config.grid_page_index]
+
+    hs.init()
 
     if _MOLLY_ENGINE then
         MollyThePoly.add_params()
