@@ -1,5 +1,5 @@
 # gridstep
-**gridstep** is a polyphonic, isomorphic grid keyboard sequencer for monome norns + grid. 
+**gridstep** is a polyphonic, isomorphic grid keyboard sequencer for monome norns + grid using the timber engine. 
 
 ![](doc/img/page_trig.png)
 
@@ -9,6 +9,7 @@
 
 * **norns**
 * **grid 128 or 64** - note input and sequencing
+* **timber** - for internal sounds. install from maiden
 
 ### optional
 
@@ -20,6 +21,7 @@
 
 * The grid can be played in an isomorphic layout that is either chromatic or in-scale. 
 * It can sequence up to 16 tracks. 
+* 16 sounds can be loaded into the Timber engine. 
 * Sequences are stored as grid positions rather than notes and can be recorded from the grid input or programmed in.
 * Each track can send it's notes to the internal sound engine (Molly The Poly) or to any midi channel or device. 
 * Each track can have up to 16 patterns that can be quickly changed individually or as scenes.
@@ -35,7 +37,9 @@ documentation for **gridstep** can be found [here](doc/README.md).
 
 ### changelog
 
-**v1.1.1** - bug fix to prevent too many of the same note from triggering at once which can crash Molly The Poly
+**v1.2.1** - Changed the sound engine to Timber. No UI yet, use the params menu to change sounds. There are 16 sound slots which are currently mapped to a track's midi channel parameter. 
+
+**v1.1.1** - Bug fix to prevent too many of the same note from triggering at once which can crash Molly The Poly
 
 **v1.1.0** - Added support for 64 / 8x8 grids. 
 
