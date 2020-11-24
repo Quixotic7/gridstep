@@ -3448,9 +3448,17 @@ function PageSound.init()
             end
         )
     end
+
+    if _TIMBER_ENGINE then
+        PageSound.paramUtil:add_option("Coming soon", nil, nil,
+            function(n,z)
+            end
+        )
+    end
 end
 
 function PageSound.key(n,z)
+
     PageSound.paramUtil:key(n,z)
 end
 function PageSound.enc(n,d)

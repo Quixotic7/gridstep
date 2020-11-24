@@ -48,6 +48,8 @@ function ParamListUtil:add_option(name, get_func, delta_func, key_func)
 end
 
 function ParamListUtil:key(n,z)
+    if #self.options == 0 then return end
+
     local option = self.options[self.selection]
 
     if option.key ~= nil then
@@ -56,6 +58,8 @@ function ParamListUtil:key(n,z)
 end
 
 function ParamListUtil:enc(n,d)
+    if #self.options == 0 then return end
+
     if n == 2 then
         local prevSelection = self.selection
         self.selection_d, self.selection = Q7Util.enc_delta_slow(d, self.selection_d, 1, #self.options)
@@ -83,6 +87,8 @@ function ParamListUtil:enc(n,d)
 end
 
 function ParamListUtil:redraw()
+    if #self.options == 0 then return end
+
     -- screen.clear()
     screen.move(0,0)
 
