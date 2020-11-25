@@ -33,6 +33,8 @@
 
 documentation for **gridstep** can be found [here](doc/README.md).
 
+https://youtu.be/RaOxDwYcZiQ
+
 ### installation
 
 gridstep.lua should be placed in "/home/we/dust/code/gridstep/gridstep.lua"
