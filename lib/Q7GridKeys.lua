@@ -36,7 +36,7 @@ function Q7GridKeys.new(width,height)
     gk.id = 1
     gk.midi_device = 1
     gk.midi_channel = 1
-    gk.sound_mode = 1 -- 1 = internal, 2 = external
+    gk.sound_mode = 1 -- 1 = internal, 2 = external, 3 = kit
 
 
     gk.layout_mode = 1
@@ -158,6 +158,8 @@ function Q7GridKeys:resize_grid(x,y,width,height)
             self.anim_steps[x][y] = 0
         end
     end
+
+    -- create_kit_notes()
 end
 
 function Q7GridKeys:change_scale(new_root_note, new_scale_mode)
@@ -179,13 +181,15 @@ function Q7GridKeys:create_kit_notes()
     self.kit_notes = {}
     self.kit_has_sample = {}
 
+
+
     for i = 1,128 do
-        self.kit_notes[i] = i
+        self.kit_notes[i] = i-1
     end
 
-    for i = 1,8 do
-        self.kit_has_sample[i] = 1
-    end
+    -- for i = 1,8 do
+    --     self.kit_has_sample[i] = 0
+    -- end
 end
 
 function Q7GridKeys:grid_to_note(x,y)
@@ -548,7 +552,7 @@ function Q7GridKeys:is_note_in_scale(noteNum)
         -- local note_has_sample = self.kit_has_sample[noteNum]
         -- return note_has_sample and (note_has_sample == 1) or 0
 
-        return self.kit_has_sample[noteNum] == 1
+        return self.kit_has_sample[noteNum+1] == 1
 
     else
         return self.note_in_scale[noteNum] == 1

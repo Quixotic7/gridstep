@@ -14,6 +14,11 @@ end
 
 local Timber = nil
 local NUM_SAMPLES = 16
+local KIT_SAMPLES = 128
+local KIT_SAMPLES_START = NUM_SAMPLES
+local KIT_SAMPLES_END = KIT_SAMPLES + NUM_SAMPLES
+
+TIMBER_QUANTIZATION = {"None", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "1 bar"}
 
 if _TIMBER_ENGINE then
     Timber = include("timber/lib/timber_engine")
@@ -67,7 +72,7 @@ local active_midi_notes = {}
 local active_internal_notes = {}
 
 
-local SoundModes = {"Internal", "External"}
+local SoundModes = {"Internal", "External", "Kit"}
 
 local all_gridKeys = {}
 local all_gridSeqs = {}
@@ -103,6 +108,7 @@ local textentry_active = false
 local PageTest = {}
 local PageScale = {}
 local PageSound = {}
+local PageKit = {}
 local PageTrack = {}
 local PageClock = {}
 local PageSaveLoad = {}
@@ -114,8 +120,8 @@ local showTrigPage = false
 
 local current_page = {}
 
-local pages = {PageScale, PageSound, PageClock, PageTrack, PageTrig, PageMicroTiming, PageSaveLoad, PageQ7}
-local page_titles = {"Scale", "Sound", "Clock", "Track", "Trig", "Step Time", "Save / Load", "Credits"}
+local pages = {PageScale, PageSound, PageKit, PageClock, PageTrack, PageTrig, PageMicroTiming, PageSaveLoad, PageQ7}
+local page_titles = {"Scale", "Sound", "Kit", "Clock", "Track", "Trig", "Step Time", "Save / Load", "Credits"}
 
 local header_height = 12
 
@@ -250,12 +256,42 @@ function init()
             -- callback_set_screen_dirty(id)
         end
 
+        Timber.set_bpm(clock.get_tempo())
+
         Timber.add_params()
         params:add_separator()
         for i = 0, NUM_SAMPLES - 1 do
             Timber.add_sample_params(i)
             Timber.load_sample(i, _path.code .. "/timber/audio/piano-c.wav")
         end
+
+        for i = KIT_SAMPLES_START, KIT_SAMPLES_END do
+            local extra_params = {
+              {type = "option", id = "launch_mode_" .. i, name = "Launch Mode", options = {"Gate", "Toggle"}, default = 1, action = function(value)
+                Timber.setup_params_dirty = true
+              end},
+              {type = "option", id = "quantization_" .. i, name = "Quantization", options = {"None", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "1 bar"}, default = 1, action = function(value)
+                if value == 1 then
+                  for n = #note_queue, 1, -1 do
+                    if note_queue[n].sample_id == i then
+                      table.remove(note_queue, n)
+                      if Timber.samples_meta[i].playing then
+                        -- sample_status[i] = STATUS.PLAYING
+                      else
+                        -- sample_status[i] = STATUS.STOPPED
+                      end
+                    --   grid_dirty = true
+                    end
+                  end
+                end
+                Timber.setup_params_dirty = true
+              end}
+            }
+            Timber.add_sample_params(i, true, extra_params)
+
+            -- Timber.add_sample_params(i, false, extra_params)
+
+          end
 
     end
 
@@ -627,8 +663,8 @@ function play_sequence()
 
         active_internal_notes = {} -- prevents notes from playing on top of each other in a step
 
-        -- clock.sync(1/24) -- 6 substeps
-        clock.sync(1/48) -- 12 substeps
+        clock.sync(1/48) -- 6 substeps
+        -- clock.sync(1/48) -- 12 substeps
 
         -- grid_redraw()
 
@@ -831,13 +867,14 @@ function grid_note_on(gKeys, noteNum, vel)
             n.vel = vel
             n.channel = gKeys.midi_channel
 
-            active_internal_notes[noteNum] = n
 
             if _MOLLY_ENGINE then
+                active_internal_notes[noteNum] = n
                 engine.noteOn(noteNum, music.note_num_to_freq(noteNum), vel / 127)
             end
 
             if _TIMBER_ENGINE then
+
                 local sample_id = gKeys.midi_channel - 1
                 local voice_id = sample_id * 128 + noteNum
 
@@ -862,6 +899,28 @@ function grid_note_on(gKeys, noteNum, vel)
             n.channel = gKeys.midi_channel
 
             active_midi_notes[gKeys.midi_device][gKeys.midi_channel][noteNum] = n
+        end
+    elseif gKeys.sound_mode == 3 then -- internal kit
+        if _TIMBER_ENGINE then
+            local sample_id = KIT_SAMPLES_START + noteNum
+            local voice_id = sample_id * 128 + noteNum
+
+            print("sample_id "..sample_id)
+
+            if Timber.samples_meta[sample_id].num_frames > 0 then
+                engine.noteOn(voice_id, music.note_num_to_freq(60), vel / 127, sample_id)
+
+                -- sample_status[sample_id] = STATUS.PLAYING
+                -- global_view:add_play_visual()
+                -- screen_dirty = true
+                -- grid_dirty = true
+            end
+
+
+            -- local sample_id = gKeys.midi_channel - 1
+            -- local voice_id = sample_id * 128 + noteNum
+
+            -- engine.noteOn(voice_id, music.note_num_to_freq(noteNum), vel / 127, sample_id)
         end
     end
 end
@@ -891,7 +950,13 @@ function grid_note_off(gKeys, noteNum)
             m:note_off(noteNum, 0, gKeys.midi_channel)
             active_midi_notes[gKeys.midi_device][gKeys.midi_channel][noteNum] = nil
         end
-        
+    elseif gKeys.sound_mode == 3 then -- internal kit
+        if _TIMBER_ENGINE then
+            local sample_id = KIT_SAMPLES_START + noteNum
+            local voice_id = sample_id * 128 + noteNum
+
+            engine.noteOff(voice_id)
+        end
     end
 end
 
@@ -3281,7 +3346,7 @@ function PageTrack.init()
     PageTrack.paramUtil:add_option("Sound Source",
         function() return SoundModes[gridKeys.sound_mode] end,
         function(d,d_raw) 
-            gridKeys.sound_mode = util.clamp(gridKeys.sound_mode + d, 1, 2)
+            gridKeys.sound_mode = util.clamp(gridKeys.sound_mode + d, 1, #SoundModes)
         end
     )
     PageTrack.paramUtil:add_option("Midi Channel",
@@ -3550,6 +3615,120 @@ function PageSound.enc(n,d)
 end
 function PageSound.redraw()
     PageSound.paramUtil:redraw()
+end
+
+
+PageKit.paramUtil = {}
+
+function PageKit.init()
+    PageKit.paramUtil = ParamListUtil.new()
+    PageKit.paramUtil.redraw_func = redraw
+
+    PageKit.paramUtil:add_option("Load Kit", nil, nil,
+        function(n,z)
+            if n == 3 and z == 1 then
+                load_kit()
+
+                -- textentry_active = true
+                -- textentry.enter(function(path) save_project(path) end, project_name, "Save As:")
+            end
+        end
+    )
+end
+
+function load_kit()
+    if _TIMBER_ENGINE == false then return end
+
+    fileselect_active = true
+
+    -- if not util.file_exists(data_path) then
+    --     util.make_dir(data_path)
+    --     print("Made data path directory")
+    -- end
+
+    Timber.FileSelect.enter(_path.audio, function(file)
+        fileselect_active = false
+
+        if file ~= "cancel" then
+            load_folder(file, false)
+            gridKeys.sound_mode = 3
+        end
+    end)
+
+    -- textentry_active = true
+    -- textentry.enter(function(path) save_project(path) end, project_name, "Save As:")
+
+
+    -- file_select_active = true
+    --   local add = shift_mode
+    --   shift_mode = false
+    --   Timber.shift_mode = shift_mode
+    --   Timber.FileSelect.enter(_path.audio, function(file)
+    --     file_select_active = false
+    --     screen_dirty = true
+    --     if file ~= "cancel" then
+    --       load_folder(file, add)
+    --     end
+    --   end)
+      
+end
+
+function load_folder(file, add)
+  
+    local sample_id = KIT_SAMPLES_START
+    -- if add then
+    --   for i = NUM_SAMPLES - 1, 0, -1 do
+    --     if Timber.samples_meta[i].num_frames > 0 then
+    --       sample_id = i + 1
+    --       break
+    --     end
+    --   end
+    -- end
+    
+    Timber.clear_samples(KIT_SAMPLES_START, KIT_SAMPLES_END)
+
+    gridKeys.kit_has_sample = {}
+
+    
+    local split_at = string.match(file, "^.*()/")
+    local folder = string.sub(file, 1, split_at)
+    file = string.sub(file, split_at + 1)
+
+
+
+    
+    local found = false
+    for k, v in ipairs(Timber.FileSelect.list) do
+      if v == file then found = true end
+      if found then
+        if sample_id > KIT_SAMPLES then
+          print("Max files loaded")
+          break
+        end
+        -- Check file type
+        local lower_v = v:lower()
+        if string.find(lower_v, ".wav") or string.find(lower_v, ".aif") or string.find(lower_v, ".aiff") or string.find(lower_v, ".ogg") then
+          Timber.load_sample(sample_id, folder .. v)
+          gridKeys.kit_has_sample[sample_id-KIT_SAMPLES_START+1] = 1
+
+          sample_id = sample_id + 1
+
+          
+        else
+          print("Skipped", v)
+        end
+      end
+    end
+end
+
+function PageKit.key(n,z)
+    PageKit.paramUtil:key(n,z)
+end
+function PageKit.enc(n,d)
+    PageKit.paramUtil:enc(n,d)
+end
+function PageKit.redraw()
+    PageKit.paramUtil:redraw()
 end
 
 

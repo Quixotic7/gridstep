@@ -141,7 +141,7 @@ function Q7GridSeq:play_start()
     self.sub_step_counter = 0
     self.sub_steps = {}
     self.sub_steps2 = {}
-    self.play_clock_id = clock.run(function() Q7GridSeq.play_sequence(self) end)
+    -- self.play_clock_id = clock.run(function() Q7GridSeq.play_sequence(self) end)
 
     self:reset_counters(self.active_pattern)
 end
@@ -149,7 +149,7 @@ end
 function Q7GridSeq:play_stop()
     if self.is_playing then
         self.is_playing = false
-        clock.cancel(self.play_clock_id)
+        -- clock.cancel(self.play_clock_id)
 
         -- stop all active notes
         for i,e in pairs(self.active_notes) do
