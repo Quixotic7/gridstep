@@ -46,7 +46,9 @@ easiest way to install from ssh is:
 cd /home/we/dust/code/
 git clone https://github.com/Quixotic7/gridstep.git
 ```
+make sure you have installed Timber from maiden.
 
+system > reset then launch gridstep
 
 ### changelog
 **v1.2.3** - Added beat synced delay based on halfsecond from awake.
