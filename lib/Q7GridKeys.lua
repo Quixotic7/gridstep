@@ -28,7 +28,7 @@ local ripple_anim = {
     {{0,0}},
 }
 
-Q7GridKeys.layout_names = {"Chromatic", "Scale"}
+Q7GridKeys.layout_names = {"Chromatic", "Scale", "Kit"}
 
 function Q7GridKeys.new(width,height)
     local gk = setmetatable({}, Q7GridKeys)
@@ -93,6 +93,7 @@ function Q7GridKeys.new(width,height)
     -- gk.note_in_scale = {}
     gk:resize_grid(gk.grid_x,gk.grid_y ,gk.grid_width,gk.grid_height)
     gk:change_scale(1, 1)
+    gk:create_kit_notes()
     return gk
 end
 
@@ -174,6 +175,19 @@ function Q7GridKeys:change_scale(new_root_note, new_scale_mode)
     end
 end
 
+function Q7GridKeys:create_kit_notes()
+    self.kit_notes = {}
+    self.kit_has_sample = {}
+
+    for i = 1,128 do
+        self.kit_notes[i] = i
+    end
+
+    for i = 1,8 do
+        self.kit_has_sample[i] = 1
+    end
+end
+
 function Q7GridKeys:grid_to_note(x,y)
     if self.layout_mode == 1 then -- Chromatic mode
         return (self.vertical_offset * 5) + (x-1) + (5 * (self.grid_height-y))
@@ -184,6 +198,19 @@ function Q7GridKeys:grid_to_note(x,y)
             local note_interval = self.scale[note_index]
             return note_interval and note_interval or nil
         end
+    elseif self.layout_mode == 3 then
+        local yOffset = 16 * (self.grid_height-y) + self.vertical_offset * 16
+        local note_index = x + yOffset
+        if note_index <= 127 then 
+            local note = self.kit_notes[note_index]
+            return note and note or nil
+        end
+
+        -- x-1
+        -- local yId = (self.grid_height - y) + 1 + self.vertical_offset
+        -- return (x-1) + ((yId - 1) * self.grid_width)
+
+        -- return (self.vertical_offset * 5) + (x-1) + (5 * (self.grid_height-y))
     end
     return nil
 end
@@ -191,13 +218,19 @@ end
 function Q7GridKeys:scroll_up()
     self.vertical_offset = util.clamp(self.vertical_offset + 1, 0, 128)
 
-    print("vertical_offset: " .. self.vertical_offset)
+    -- print("vertical_offset: " .. self.vertical_offset)
 end
 
 function Q7GridKeys:scroll_down()
     self.vertical_offset = util.clamp(self.vertical_offset - 1, 0, 128)
 
-    print("vertical_offset: " .. self.vertical_offset)
+    -- print("vertical_offset: " .. self.vertical_offset)
+end
+
+function Q7GridKeys:zero_vertical_offset()
+    self.vertical_offset = 0
+
+    -- print("vertical_offset: " .. self.vertical_offset)
 end
 
 
@@ -345,6 +378,12 @@ function Q7GridKeys:grid_event_to_note(x,y)
         if note_index <= 127 then 
             local note_interval = self.scale[note_index]
             return note_interval and note_interval or nil
+        end
+    elseif self.layout_mode == 3 then
+        local note_index = x + 16 * (y-1)
+        if note_index <= 127 then 
+            local note = self.kit_notes[note_index]
+            return note and note or nil
         end
     end
     return nil
@@ -505,7 +544,15 @@ end
 -- end
 
 function Q7GridKeys:is_note_in_scale(noteNum)
-    return self.note_in_scale[noteNum] == 1
+    if self.layout_mode == 3 then
+        -- local note_has_sample = self.kit_has_sample[noteNum]
+        -- return note_has_sample and (note_has_sample == 1) or 0
+
+        return self.kit_has_sample[noteNum] == 1
+
+    else
+        return self.note_in_scale[noteNum] == 1
+    end
 end
 
 function Q7GridKeys:draw_grid(grid)
@@ -544,11 +591,13 @@ function Q7GridKeys:draw_grid(grid)
                         grid:led(x + xOff, y + yOff, 15)
                     elseif noteName == music.NOTE_NAMES[self.root_note] then
                         grid:led(x + xOff, y + yOff, 6 + selectedOff + animOff)
-                    elseif self.note_in_scale[noteNum] == 1 then
+                    elseif self:is_note_in_scale(noteNum) then
                         if self.layout_mode == 1 then -- Chromatic mode
                             grid:led(x + xOff, y + yOff, 3 + selectedOff + animOff)
                         elseif self.layout_mode == 2 then
                             grid:led(x + xOff, y + yOff, selectedOff + animOff)
+                        elseif self.layout_mode == 3 then
+                            grid:led(x + xOff, y + yOff, 3 + selectedOff + animOff)
                         end
                     elseif animOff >= 1 or selectedOff >=1 then
                         grid:led(x + xOff, y + yOff, 2 + selectedOff + animOff)

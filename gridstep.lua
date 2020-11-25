@@ -43,7 +43,7 @@ local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.2.3"
+local version_number = "1.2.4"
 
 local g = grid.connect()
 
@@ -675,12 +675,20 @@ function change_track(newTrack)
 end
 
 function change_gridKey_layout()
-    gridKeys.layout_mode = (gridKeys.layout_mode == 1) and 2 or 1
+    -- gridKeys.layout_mode = (gridKeys.layout_mode == 1) and 2 or 1
+
+    gridKeys.layout_mode = (gridKeys.layout_mode % 3) + 1
+
+    if gridKeys.layout_mode == 3 then
+        gridKeys:zero_vertical_offset()
+    end
 
     if gridKeys.sound_mode == 1 then
         all_engine_notes_off()
-    else
+    elseif gridKeys.sound_mode == 2 then
         all_midi_notes_off(gridKeys.midi_device)
+    elseif gridKeys.sound_mode == 3 then
+        all_engine_notes_off()
     end
 
     show_temporary_notification("Grid Layout = "..Q7GridKeys.layout_names[gridKeys.layout_mode])
@@ -813,7 +821,7 @@ end
 
 function grid_note_on(gKeys, noteNum, vel)
     vel = vel or 100 
-    -- print("Note On: " .. noteNum.. " " .. vel .. " " .. music.note_num_to_name(noteNum))
+    print("Note On: " .. noteNum.. " " .. vel .. " " .. music.note_num_to_name(noteNum))
 
     if gKeys.sound_mode == 1 then
 

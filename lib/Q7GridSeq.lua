@@ -1688,7 +1688,7 @@ function Q7GridSeq:key_on(e)
 end
 
 function Q7GridSeq:key_off(e)
-    print("key_off id: "..e.id.." yID: " ..e.y)
+    -- print("key_off id: "..e.id.." yID: " ..e.y)
     -- print(self.name)
 
     if self.is_playing and self.record then
