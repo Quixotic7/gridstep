@@ -33,7 +33,7 @@
 
 documentation for **gridstep** can be found [here](doc/README.md).
 
-https://youtu.be/RaOxDwYcZiQ
+[Video Tutorial](https://youtu.be/RaOxDwYcZiQ)
 
 ### installation
 
