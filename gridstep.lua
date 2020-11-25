@@ -1945,27 +1945,39 @@ function GridPatLaunch.grid_key(x,y,z)
                 show_temporary_notification("Track "..(x+xOff))
                 grid_dirty = true
             elseif y > 1 and y < 8 then
-                if GridPatLaunch.heldPattern == nil then
-                    change_track(x+xOff)
-                    all_gridSeqs[x+xOff]:change_selected_pattern(patIndex)
-                    show_temporary_notification("Pattern "..get_pattern_letter(all_gridSeqs[x].selected_pattern))
 
-                    GridPatLaunch.heldPattern = {}
-                    GridPatLaunch.heldPattern.x = x+xOff
-                    GridPatLaunch.heldPattern.y = y
-                    GridPatLaunch.heldPattern.patIndex = patIndex
-                else
-                    if x+xOff ~= GridPatLaunch.heldPattern.x or y ~= GridPatLaunch.heldPattern.y then
-                        local pat = all_gridSeqs[GridPatLaunch.heldPattern.x]:get_cloned_patern_at_index(GridPatLaunch.heldPattern.patIndex)
+                change_track(x+xOff)
+                all_gridSeqs[x+xOff]:change_selected_pattern(patIndex)
+                show_temporary_notification("Pattern "..get_pattern_letter(all_gridSeqs[x].selected_pattern))
 
-                        if pat ~= nil then
-                            if all_gridSeqs[x+xOff]:paste_pattern_to_index(pat, patIndex) then
-                                show_temporary_notification("Paste "..GridPatLaunch.heldPattern.x..get_pattern_letter(GridPatLaunch.heldPattern.patIndex).. " to "..x..get_pattern_letter(patIndex))
-                                grid_dirty = true
-                            end
-                        end
-                    end
-                end
+                GridPatLaunch.heldPattern = {}
+                GridPatLaunch.heldPattern.x = x+xOff
+                GridPatLaunch.heldPattern.y = y
+                GridPatLaunch.heldPattern.patIndex = patIndex
+
+                -- This was a nice idea, but in practice, it can mess up patterns when trying to switch multiple patterns at once
+                -- disabling until I have a better idea. Cut, copy, paste work in the meantime. 
+                -- if GridPatLaunch.heldPattern == nil then
+                --     change_track(x+xOff)
+                --     all_gridSeqs[x+xOff]:change_selected_pattern(patIndex)
+                --     show_temporary_notification("Pattern "..get_pattern_letter(all_gridSeqs[x].selected_pattern))
+
+                --     GridPatLaunch.heldPattern = {}
+                --     GridPatLaunch.heldPattern.x = x+xOff
+                --     GridPatLaunch.heldPattern.y = y
+                --     GridPatLaunch.heldPattern.patIndex = patIndex
+                -- else
+                --     if x+xOff ~= GridPatLaunch.heldPattern.x or y ~= GridPatLaunch.heldPattern.y then
+                --         local pat = all_gridSeqs[GridPatLaunch.heldPattern.x]:get_cloned_patern_at_index(GridPatLaunch.heldPattern.patIndex)
+
+                --         if pat ~= nil then
+                --             if all_gridSeqs[x+xOff]:paste_pattern_to_index(pat, patIndex) then
+                --                 show_temporary_notification("Paste "..GridPatLaunch.heldPattern.x..get_pattern_letter(GridPatLaunch.heldPattern.patIndex).. " to "..x..get_pattern_letter(patIndex))
+                --                 grid_dirty = true
+                --             end
+                --         end
+                --     end
+                -- end
                 grid_dirty = true
             elseif y == 8 then -- toolbar
                 if x == xCut then -- cut
