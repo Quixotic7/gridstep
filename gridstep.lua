@@ -48,7 +48,7 @@ local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.2.4"
+local version_number = "1.2.5"
 
 local g = grid.connect()
 
@@ -1300,6 +1300,12 @@ end
 GridSeq.show_step_edit = false
 
 function GridSeq.grid_key(x,y,z)
+    -- disable key playback while playing
+    for i,gKey in pairs(all_gridKeys) do
+        gKey.enable_key_playback = not is_playing
+    end
+
+
     if not GridSeq.show_step_edit and not shift_down and gridSeq.edit_mode == seqmode_select then
         if gridType == gridType_128 then
             grid_dirty = gridKeys:grid_key(x,y,z)
@@ -1700,10 +1706,7 @@ function GridSeq.grid_key(x,y,z)
         grid_key_shift(x,y,z)
     end
 
-    -- disable key playback while playing
-    for i,gKey in pairs(all_gridKeys) do
-        gKey.enable_key_playback = not is_playing
-    end
+    
 end
 
 -- edit_type
