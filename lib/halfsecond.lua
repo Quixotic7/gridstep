@@ -40,7 +40,7 @@ function sc.init()
 
 	params:add_separator("Delay")
 
-	params:add{type = "option", id = "delay_enabled", name = "delay enabled", options = {"off", "on"}, default = 2, 
+	params:add{type = "option", id = "delay_enabled", name = "delay enabled", options = {"off", "on"}, default = 1, 
 		action = function(value)
 			if value == 2 then
 				-- softcut.play(1, 1)
@@ -62,6 +62,9 @@ function sc.init()
 
 			end
 		end}
+
+	softcut.level(1,0) 
+	softcut.pre_level(1,0) 
 
   	params:add{id="delay_level", name="delay level", type="control", 
 		controlspec=controlspec.new(0,1,'lin',0,0.5,""),

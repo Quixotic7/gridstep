@@ -1,4 +1,6 @@
-local Q7Util = require 'gridstep/lib/Q7Util'
+-- local Q7Util = require 'gridstep/lib/Q7Util'
+local Q7Util = include("gridstep/lib/Q7Util")
+
 
 local ParamListUtil = {}
 

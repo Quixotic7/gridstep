@@ -1,5 +1,8 @@
-local Q7Util = require 'gridstep/lib/Q7Util'
-local UI = require 'gridstep/lib/Q7UI'
+-- local Q7Util = require 'gridstep/lib/Q7Util'
+-- local UI = require 'gridstep/lib/Q7UI'
+
+local Q7Util = include("gridstep/lib/Q7Util")
+local UI = require ("gridstep/lib/Q7UI")
 
 local Q7GraphicPageOptions = {}
 

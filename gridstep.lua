@@ -18,12 +18,28 @@ local KIT_SAMPLES = 128
 local KIT_SAMPLES_START = NUM_SAMPLES
 local KIT_SAMPLES_END = KIT_SAMPLES + NUM_SAMPLES
 
+local TimberUI = {}
+TimberUI.sample_setup_view = {}
+TimberUI.waveform_view = {}
+TimberUI.filter_amp_view = {}
+TimberUI.amp_mod_env_view = {}
+-- TimberUI.amp_env_view = {}
+-- TimberUI.mod_env_view = {}
+TimberUI.lfos_view = {}
+TimberUI.mod_matrix_view = {}
+TimberUI.key_matrix_view = {}
+TimberUI.page_start = 6
+TimberUI.pages = {}
+
 TIMBER_QUANTIZATION = {"None", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "1 bar"}
 
 if _TIMBER_ENGINE then
-    Timber = include("timber/lib/timber_engine")
-    engine.name = "Timber"
+    Timber = include("gridstep/lib/timber_gridstep")
+    engine.name = "Timber_Gridstep"
 end
+
+-- local TimberUI = include("gridstep/lib/TimberUI")
+
 
 local music = require 'musicutil'
 local beatclock = require 'beatclock'
@@ -37,18 +53,29 @@ if _GRID_CAPTURE then
     gcap = require 'GridCapture/GridCapture'
 end
 
-local hsdelay = require 'gridstep/lib/halfsecond'
-local Q7Util = require 'gridstep/lib/Q7Util'
-local UI = require 'gridstep/lib/Q7UI'
-local Q7GridKeys = require 'gridstep/lib/Q7GridKeys'
-local Q7GridSeq = require 'gridstep/lib/Q7GridSeq'
-local ParamListUtil = require 'gridstep/lib/Q7ParamListUtil'
-local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
+-- local hsdelay = require 'gridstep/lib/halfsecond'
+-- local Q7Util = require 'gridstep/lib/Q7Util'
+-- local UI = require 'gridstep/lib/Q7UI'
+-- local Q7GridKeys = require 'gridstep/lib/Q7GridKeys'
+-- local Q7GridSeq = require 'gridstep/lib/Q7GridSeq'
+-- local ParamListUtil = require 'gridstep/lib/Q7ParamListUtil'
+-- local GraphicPageOptions = require 'gridstep/lib/Q7GraphicPageOptions'
+
+
+local hsdelay = include("gridstep/lib/halfsecond")
+local Q7Util = include("gridstep/lib/Q7Util")
+local UI = include("gridstep/lib/Q7UI")
+local Q7GridKeys = include("gridstep/lib/Q7GridKeys")
+local Q7GridSeq = include("gridstep/lib/Q7GridSeq")
+local ParamListUtil = include("gridstep/lib/Q7ParamListUtil")
+local GraphicPageOptions = include("gridstep/lib/Q7GraphicPageOptions")
+
+
 
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.2.4"
+local version_number = "1.3.1"
 
 local g = grid.connect()
 
@@ -86,6 +113,7 @@ local config = {
     header_img = 1,
     ui_anim_step = 0,
     header_notification_y = -10,
+    sample_id = 0
 }
 
 -- for changing values with encoders nicely
@@ -109,6 +137,7 @@ local PageTest = {}
 local PageScale = {}
 local PageSound = {}
 local PageKit = {}
+local PageTimber = {}
 local PageTrack = {}
 local PageClock = {}
 local PageSaveLoad = {}
@@ -120,8 +149,9 @@ local showTrigPage = false
 
 local current_page = {}
 
-local pages = {PageScale, PageSound, PageKit, PageClock, PageTrack, PageTrig, PageMicroTiming, PageSaveLoad, PageQ7}
-local page_titles = {"Scale", "Sound", "Kit", "Clock", "Track", "Trig", "Step Time", "Save / Load", "Credits"}
+local pages = {PageSaveLoad, PageScale, PageClock, PageTrig, PageKit, PageTimber, PageTimber, PageTimber, PageTimber, PageTimber, PageTimber, PageTimber, PageSound, PageTrack, PageMicroTiming, PageQ7}
+-- local page_titles = {"Scale", "Sample", "Waveform", "Filter Amp", "Env", "LFOS", "Mod Matrix", "Key Matrix",
+--  "Sound",  "Kit", "Clock", "Track", "Trig", "Step Time", "Save / Load", "Credits"}
 
 local header_height = 12
 
@@ -242,19 +272,21 @@ function init()
     end
 
     if _TIMBER_ENGINE then
-        Timber.sample_changed_callback = function(id)
-            if Timber.samples_meta[id].manual_load then
-                -- Set our own loop point defaults
-                params:set("loop_start_frame_" .. id, util.round(Timber.samples_meta[id].num_frames * 0.2))
-                params:set("loop_end_frame_" .. id, util.round(Timber.samples_meta[id].num_frames * 0.4))
+        Timber.sample_changed_callback = on_sample_loaded
+        
+        -- function(id)
+        --     if Timber.samples_meta[id].manual_load then
+        --         -- Set our own loop point defaults
+        --         params:set("loop_start_frame_" .. id, util.round(Timber.samples_meta[id].num_frames * 0.2))
+        --         params:set("loop_end_frame_" .. id, util.round(Timber.samples_meta[id].num_frames * 0.4))
                 
-                -- Set env defaults
-                params:set("amp_env_attack_" .. id, 0.01)
-                params:set("amp_env_sustain_" .. id, 0.8)
-                params:set("amp_env_release_" .. id, 0.4)
-            end
-            -- callback_set_screen_dirty(id)
-        end
+        --         -- Set env defaults
+        --         params:set("amp_env_attack_" .. id, 0.01)
+        --         params:set("amp_env_sustain_" .. id, 0.8)
+        --         params:set("amp_env_release_" .. id, 0.4)
+        --     end
+        --     -- callback_set_screen_dirty(id)
+        -- end
 
         Timber.set_bpm(clock.get_tempo())
 
@@ -266,28 +298,30 @@ function init()
         end
 
         for i = KIT_SAMPLES_START, KIT_SAMPLES_END do
-            local extra_params = {
-              {type = "option", id = "launch_mode_" .. i, name = "Launch Mode", options = {"Gate", "Toggle"}, default = 1, action = function(value)
-                Timber.setup_params_dirty = true
-              end},
-              {type = "option", id = "quantization_" .. i, name = "Quantization", options = {"None", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "1 bar"}, default = 1, action = function(value)
-                if value == 1 then
-                  for n = #note_queue, 1, -1 do
-                    if note_queue[n].sample_id == i then
-                      table.remove(note_queue, n)
-                      if Timber.samples_meta[i].playing then
-                        -- sample_status[i] = STATUS.PLAYING
-                      else
-                        -- sample_status[i] = STATUS.STOPPED
-                      end
-                    --   grid_dirty = true
-                    end
-                  end
-                end
-                Timber.setup_params_dirty = true
-              end}
-            }
-            Timber.add_sample_params(i, true, extra_params)
+            -- local extra_params = {
+            --   {type = "option", id = "launch_mode_" .. i, name = "Launch Mode", options = {"Gate", "Toggle"}, default = 1, action = function(value)
+            --     Timber.setup_params_dirty = true
+            --   end},
+            --   {type = "option", id = "quantization_" .. i, name = "Quantization", options = {"None", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "1 bar"}, default = 1, action = function(value)
+            --     if value == 1 then
+            --       for n = #note_queue, 1, -1 do
+            --         if note_queue[n].sample_id == i then
+            --           table.remove(note_queue, n)
+            --           if Timber.samples_meta[i].playing then
+            --             -- sample_status[i] = STATUS.PLAYING
+            --           else
+            --             -- sample_status[i] = STATUS.STOPPED
+            --           end
+            --         --   grid_dirty = true
+            --         end
+            --       end
+            --     end
+            --     Timber.setup_params_dirty = true
+            --   end}
+            -- }
+            Timber.add_sample_params(i)
+
+            -- Timber.add_sample_params(i, true, extra_params)
 
             -- Timber.add_sample_params(i, false, extra_params)
 
@@ -313,6 +347,8 @@ function init()
 
         all_gridKeys[i].note_on = grid_note_on
         all_gridKeys[i].note_off = grid_note_off
+        all_gridKeys[i].key_pushed = grid_key_pushed
+
 
         all_gridSeqs[i] = Q7GridSeq.new(all_gridKeys[i])
 
@@ -493,6 +529,53 @@ function create_new_project()
 
     -- clock.run(screen_redraw_clock)
     -- clock.run(grid_redraw_clock) -- start the grid redraw clock
+end
+
+function update_gridKeys_samples()
+    for sampleId = KIT_SAMPLES_START, KIT_SAMPLES_END do
+        for i, gKeys in pairs(all_gridKeys) do
+            gKeys.kit_has_sample[sampleId-KIT_SAMPLES_START+1] = Timber.does_sample_exist(sampleId) and 1 or 0
+        end
+    end
+end
+
+function on_sample_loaded(sampleId)
+    if Timber.samples_meta[sampleId].manual_load then
+        if sampleId >= KIT_SAMPLES_START then
+            -- if Timber.samples_meta[sampleId].streaming == 0 and Timber.samples_meta[sampleId].num_frames / Timber.samples_meta[sampleId].sample_rate < 1 and string.find(string.lower(params:get("sample_" .. sampleId)), "loop") == nil then
+            --     params:set("play_mode_" .. sampleId, 4) -- One shot
+            -- end
+
+            if string.find(string.lower(params:get("sample_" .. sampleId)), "loop") == nil then
+                params:set("play_mode_" .. sampleId, 4) -- One shot
+            end
+
+            -- for i, gKeys in pairs(all_gridKeys) do
+            --     gKeys.kit_has_sample[sampleId-KIT_SAMPLES_START+1] = 1
+            -- end
+
+        else
+            -- Set our own loop point defaults
+            params:set("loop_start_frame_" .. sampleId, util.round(Timber.samples_meta[sampleId].num_frames * 0.2))
+            params:set("loop_end_frame_" .. sampleId, util.round(Timber.samples_meta[sampleId].num_frames * 0.4))
+            
+            -- Set env defaults
+            params:set("amp_env_attack_" .. sampleId, 0.01)
+            params:set("amp_env_sustain_" .. sampleId, 0.8)
+            params:set("amp_env_release_" .. sampleId, 0.4)
+        end
+
+        -- update_gridKeys_samples()
+    end
+
+    if sampleId >= KIT_SAMPLES_START then
+        for i, gKeys in pairs(all_gridKeys) do
+            gKeys.kit_has_sample[sampleId-KIT_SAMPLES_START+1] = Timber.does_sample_exist(sampleId) and 1 or 0
+        end
+
+        grid_dirty = true
+    end
+    -- callback_set_screen_dirty(id)
 end
 
 function on_tempo_changed(newTempo)
@@ -687,6 +770,22 @@ end
 --     gridSeq:key_off(e)
 -- end
 
+local function change_sample_id(id)
+    config.sample_id = id
+    -- while current_sample_id >= NUM_SAMPLES do current_sample_id = current_sample_id - NUM_SAMPLES end
+    -- while current_sample_id < 0 do current_sample_id = current_sample_id + NUM_SAMPLES end
+    
+    TimberUI.sample_setup_view:set_sample_id(config.sample_id)
+    TimberUI.waveform_view:set_sample_id(config.sample_id)
+    TimberUI.filter_amp_view:set_sample_id(config.sample_id)
+    TimberUI.amp_mod_env_view:set_sample_id(config.sample_id)
+    -- TimberUI.amp_env_view:set_sample_id(config.sample_id)
+    -- TimberUI.mod_env_view:set_sample_id(config.sample_id)
+    TimberUI.lfos_view:set_sample_id(config.sample_id)
+    TimberUI.mod_matrix_view:set_sample_id(config.sample_id)
+    TimberUI.key_matrix_view:set_sample_id(config.sample_id)
+  end
+
 function change_track(newTrack)
     if newTrack == track or newTrack < 1 or newTrack > 16 then
         return false
@@ -707,13 +806,22 @@ function change_track(newTrack)
     gridSeq.edit_mode = prevGridSeq.edit_mode
 
     -- PageTrack.init()
+    if gridKeys.sound_mode == 1 then
+        change_sample_id(gridKeys.midi_channel - 1)
+    elseif gridKeys.sound_mode == 3 then
+        change_sample_id(KIT_SAMPLES_START)
+    end
+
     return true
 end
 
-function change_gridKey_layout()
+function change_gridKey_layout(new_layout_mode, show_notification)
     -- gridKeys.layout_mode = (gridKeys.layout_mode == 1) and 2 or 1
 
-    gridKeys.layout_mode = (gridKeys.layout_mode % 3) + 1
+    new_layout_mode = new_layout_mode or ((gridKeys.layout_mode % 3) + 1)
+    show_notification = show_notification == nil and true or show_notification
+
+    gridKeys.layout_mode = new_layout_mode
 
     if gridKeys.layout_mode == 3 then
         gridKeys:zero_vertical_offset()
@@ -727,7 +835,9 @@ function change_gridKey_layout()
         all_engine_notes_off()
     end
 
-    show_temporary_notification("Grid Layout = "..Q7GridKeys.layout_names[gridKeys.layout_mode])
+    if show_notification then
+        show_temporary_notification("Grid Layout = "..Q7GridKeys.layout_names[gridKeys.layout_mode])
+    end
 end
 
 function change_grid_page(newMode)
@@ -855,9 +965,18 @@ function grid_record()
     end
 end
 
+function grid_key_pushed(gKeys, noteNum, vel)
+    if gKeys.sound_mode == 3 then -- internal kit
+        if _TIMBER_ENGINE then
+            local sample_id = KIT_SAMPLES_START + noteNum
+            change_sample_id(sample_id)
+        end
+    end
+end
+
 function grid_note_on(gKeys, noteNum, vel)
     vel = vel or 100 
-    print("Note On: " .. noteNum.. " " .. vel .. " " .. music.note_num_to_name(noteNum))
+    -- print("Note On: " .. noteNum.. " " .. vel .. " " .. music.note_num_to_name(noteNum))
 
     if gKeys.sound_mode == 1 then
 
@@ -905,7 +1024,7 @@ function grid_note_on(gKeys, noteNum, vel)
             local sample_id = KIT_SAMPLES_START + noteNum
             local voice_id = sample_id * 128 + noteNum
 
-            print("sample_id "..sample_id)
+            -- print("sample_id "..sample_id)
 
             if Timber.samples_meta[sample_id].num_frames > 0 then
                 engine.noteOn(voice_id, music.note_num_to_freq(60), vel / 127, sample_id)
@@ -1300,6 +1419,12 @@ end
 GridSeq.show_step_edit = false
 
 function GridSeq.grid_key(x,y,z)
+    -- disable key playback while playing
+    for i,gKey in pairs(all_gridKeys) do
+        gKey.enable_key_playback = not is_playing
+    end
+
+
     if not GridSeq.show_step_edit and not shift_down and gridSeq.edit_mode == seqmode_select then
         if gridType == gridType_128 then
             grid_dirty = gridKeys:grid_key(x,y,z)
@@ -1700,10 +1825,7 @@ function GridSeq.grid_key(x,y,z)
         grid_key_shift(x,y,z)
     end
 
-    -- disable key playback while playing
-    for i,gKey in pairs(all_gridKeys) do
-        gKey.enable_key_playback = not is_playing
-    end
+    
 end
 
 -- edit_type
@@ -3070,21 +3192,30 @@ function GridPatLaunch.grid_redraw()
 end
 
 function key(n,z)
-    if fileselect_active or textentry_active then
+    if fileselect_active or textentry_active or Timber.file_select_active then
         return
     end
 
-    if should_show_trig_page() then
-        PageTrig.key(n,z)
+    if n == 1 then
+        -- Shift  
+        if z == 1 then
+        --   shift_mode = true
+          Timber.shift_mode = true
+        else
+        --   shift_mode = false
+          Timber.shift_mode = false
+        end
     else
-        current_page.key(n,z)
+        if should_show_trig_page() then
+            PageTrig.key(n,z)
+        else
+            current_page.key(n,z)
+        end
     end
-
-    
 end
 
 function enc(n,d)
-    if fileselect_active or textentry_active then
+    if fileselect_active or textentry_active or Timber.file_select_active then
         return
     end
 
@@ -3114,12 +3245,13 @@ function enc(n,d)
 end
 
 function should_show_trig_page()
-    local pageTitle = page_titles[config.page_index]
+    -- local pageTitle = page_titles[config.page_index]
+    local pageTitle = current_page.get_title()
     return showTrigPage and pageTitle ~= "Step Time" and pageTitle ~= "Trig"
 end
 
 function redraw()
-    if fileselect_active or textentry_active then
+    if fileselect_active or textentry_active or Timber.file_select_active then
         return
     end
     screen.clear()
@@ -3132,11 +3264,14 @@ function redraw()
     -- "Step Time", "Track", "Trig",
 
     if should_show_trig_page() then
+        -- local pageTitle = pages[config.page_index].get_title()
         PageTrig.redraw()
-        draw_page_header(page_titles[config.page_index])
+        draw_page_header(PageTrig.get_title())
     else
         current_page.redraw()
-        draw_page_header(page_titles[config.page_index])
+
+        local title, font_size, max_title_length = current_page.get_title()
+        draw_page_header(title, font_size, max_title_length)
     end
 
     -- if display_notification then
@@ -3214,7 +3349,9 @@ function get_pattern_letter(patIndex)
     return pattern_num_to_letter[patIndex]
 end
 
-function draw_page_header(page_title)
+function draw_page_header(page_title, font_size, max_title_length)
+    font_size = font_size or 11
+    max_title_length = max_title_length or 11
 
     -- draw pages line
     screen.line_width(1)
@@ -3279,10 +3416,10 @@ function draw_page_header(page_title)
     screen.level(15)
     screen.move(21,12)
     screen.font_face(18)
-    screen.font_size(11)
+    screen.font_size(font_size)
     -- page_title = "Long ass title like really long"
     -- page_title = "0808080808080808080808080"
-    page_title = string.sub(page_title, 1, 11)  
+    page_title = string.sub(page_title, 1, max_title_length)  
     screen.text(page_title)
 
 
@@ -3318,7 +3455,9 @@ end
 
 PageTrack.paramUtil = {}
 
-
+function PageTrack.get_title()
+    return "Track"
+end
 
 function PageTrack.init()
 
@@ -3409,6 +3548,10 @@ function PageTrack.redraw()
 end
 
 PageScale.paramUtil = {}
+
+function PageScale.get_title()
+    return "Scale"
+end
 
 function PageScale.init()
     PageScale.paramUtil = ParamListUtil.new()
@@ -3519,6 +3662,10 @@ end
 
 PageSound.paramUtil = {}
 
+function PageSound.get_title()
+    return "Delay"
+end
+
 function PageSound.init()
     PageSound.paramUtil = ParamListUtil.new()
     PageSound.paramUtil.redraw_func = redraw
@@ -3620,9 +3767,20 @@ end
 
 PageKit.paramUtil = {}
 
+function PageKit.get_title()
+    return "Sound"
+end
+
 function PageKit.init()
     PageKit.paramUtil = ParamListUtil.new()
     PageKit.paramUtil.redraw_func = redraw
+
+    PageKit.paramUtil:add_option("Sound Source",
+        function() return SoundModes[gridKeys.sound_mode] end,
+        function(d,d_raw) 
+            gridKeys.sound_mode = util.clamp(gridKeys.sound_mode + d, 1, #SoundModes)
+        end
+    )
 
     PageKit.paramUtil:add_option("Load Kit", nil, nil,
         function(n,z)
@@ -3632,6 +3790,20 @@ function PageKit.init()
                 -- textentry_active = true
                 -- textentry.enter(function(path) save_project(path) end, project_name, "Save As:")
             end
+        end
+    )
+
+    PageKit.paramUtil:add_option("Midi Channel",
+        function() return gridKeys.midi_channel end,
+        function(d,d_raw) 
+            gridKeys.midi_channel = util.clamp(gridKeys.midi_channel + d, 1, 16)
+        end
+    )
+
+    PageKit.paramUtil:add_option("Midi Device",
+        function() return gridKeys.midi_device end,
+        function(d,d_raw) 
+            gridKeys.midi_device = util.clamp(gridKeys.midi_device + d, 1, 4)
         end
     )
 end
@@ -3651,7 +3823,11 @@ function load_kit()
 
         if file ~= "cancel" then
             load_folder(file, false)
+            update_gridKeys_samples()
             gridKeys.sound_mode = 3
+            change_gridKey_layout(3, false)
+            grid_dirty = true
+            grid_redraw()
         end
     end)
 
@@ -3693,9 +3869,6 @@ function load_folder(file, add)
     local split_at = string.match(file, "^.*()/")
     local folder = string.sub(file, 1, split_at)
     file = string.sub(file, split_at + 1)
-
-
-
     
     local found = false
     for k, v in ipairs(Timber.FileSelect.list) do
@@ -3709,10 +3882,13 @@ function load_folder(file, add)
         local lower_v = v:lower()
         if string.find(lower_v, ".wav") or string.find(lower_v, ".aif") or string.find(lower_v, ".aiff") or string.find(lower_v, ".ogg") then
           Timber.load_sample(sample_id, folder .. v)
-          gridKeys.kit_has_sample[sample_id-KIT_SAMPLES_START+1] = 1
+        --   gridKeys.kit_has_sample[sample_id-KIT_SAMPLES_START+1] = 1
+
+            for i, gKeys in pairs(all_gridKeys) do
+                gKeys.kit_has_sample[sample_id-KIT_SAMPLES_START+1] = 1
+            end
 
           sample_id = sample_id + 1
-
           
         else
           print("Skipped", v)
@@ -3731,7 +3907,53 @@ function PageKit.redraw()
     PageKit.paramUtil:redraw()
 end
 
+PageTimber.init_complete = false
 
+function PageTimber.get_title()
+    return Timber.get_sample_name(config.sample_id), 9, 16
+end
+
+function PageTimber.init()
+    if PageTimber.init_complete then return end
+
+    TimberUI.sample_setup_view = Timber.UI.SampleSetup.new(0)
+    TimberUI.waveform_view = Timber.UI.Waveform.new(0)
+    TimberUI.filter_amp_view = Timber.UI.FilterAmp.new(0)
+    TimberUI.amp_mod_env_view = Timber.UI.AmpModEnv.new(0)
+    TimberUI.lfos_view = Timber.UI.Lfos.new(0)
+    TimberUI.mod_matrix_view = Timber.UI.ModMatrix.new(0)
+    TimberUI.key_matrix_view = Timber.UI.KeyMatrix.new(0)
+
+    -- TimberUI.pages = {TimberUI.sample_setup_view, TimberUI.waveform_view}
+
+    TimberUI.pages = {TimberUI.sample_setup_view, TimberUI.waveform_view, TimberUI.filter_amp_view, TimberUI.amp_mod_env_view, TimberUI.lfos_view, TimberUI.mod_matrix_view, TimberUI.key_matrix_view}
+
+
+    PageTimber.init_complete = true
+end
+function PageTimber.key(n,z)
+    local timberPage = (config.page_index - TimberUI.page_start) + 1
+    TimberUI.pages[timberPage]:key(n,z)
+
+    -- TimberUI.waveform_view:key(n, z)
+end
+function PageTimber.enc(n,d)
+    local timberPage = (config.page_index - TimberUI.page_start) + 1
+    TimberUI.pages[timberPage]:enc(n, d)
+
+    -- TimberUI.waveform_view:enc(n, d)
+end
+function PageTimber.redraw()
+    local timberPage = (config.page_index - TimberUI.page_start) + 1
+    TimberUI.pages[timberPage]:redraw()
+
+    -- TimberUI.waveform_view:redraw()
+end
+
+
+function PageQ7.get_title()
+    return "Credits"
+end
 function PageQ7.init()
 end
 function PageQ7.key(n,z)
@@ -3752,6 +3974,10 @@ end
 PageTest.paramUtil = {}
 
 PageTest.test = {0,0,0,0,0,0,0,0}
+
+function PageTest.get_title()
+    return "Test"
+end
 
 function PageTest.init()
     PageTest.paramUtil = GraphicPageOptions.new(1,13,128,64-13)
@@ -3865,6 +4091,10 @@ end
 
 PageClock.paramUtil = {}
 
+function PageClock.get_title()
+    return "Clock"
+end
+
 function PageClock.init()
     PageClock.paramUtil = ParamListUtil.new()
     PageClock.paramUtil.redraw_func = redraw
@@ -3904,6 +4134,10 @@ PageTrig.paramUtil = {}
 
 PageTrig.offsetSlider = {}
 PageTrig.enable_snap = false
+
+function PageTrig.get_title()
+    return "Trig"
+end
 
 function PageTrig.init()
     PageTrig.enable_snap = false
@@ -4148,6 +4382,9 @@ function load_serialized_table(d)
     enc_d.root_note = config.root_note
     enc_d.scale_mode = config.scale_mode
 
+    track = 0
+    change_track(1)
+
     -- gridSeq:load_serialized(d.gridSeq)
 end
 
@@ -4228,6 +4465,10 @@ end
 
 PageSaveLoad.paramUtil = {}
 
+function PageSaveLoad.get_title()
+    return project_name == "" and "Unsaved Proj" or project_name
+end
+
 function PageSaveLoad.init()
     PageSaveLoad.paramUtil = ParamListUtil.new()
     PageSaveLoad.paramUtil.redraw_func = redraw
@@ -4306,6 +4547,10 @@ PageMicroTiming.offsetSlider = {}
 PageMicroTiming.normal_value_labels = {"ON GRID", "1/128T", "2/128T", "1/64", "4/128T", "5/128T", "1/32", "7/128T", "8/128T", "3/64", "10/128T", "11/128T","1/16"}
 PageMicroTiming.triplet_value_labels = {"ON GRID", "1/128T", "1/64T", "3/128T", "1/32T", "5/128T", "3/64T", "7/128T", "1/16T", "9/128T", "5/64T", "11/128T", "3/32T", "13/128T", "7/64T", "15/128T", "1/8T",}
 PageMicroTiming.enable_snap = false
+
+function PageMicroTiming.get_title()
+    return "Step Time"
+end
 
 function PageMicroTiming.init()
     PageMicroTiming.enable_snap = false

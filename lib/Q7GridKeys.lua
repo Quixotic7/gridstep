@@ -50,6 +50,8 @@ function Q7GridKeys.new(width,height)
     gk.note_on = nil -- event callback
     gk.note_off = nil -- event callback
 
+    gk.key_pushed = nil -- event callback when user presses key for UI stuff
+
     gk.key_on = nil -- event callback for GridSeq
     gk.key_off = nil -- event callback for GridSeq
 
@@ -435,6 +437,8 @@ function Q7GridKeys:grid_key(x,y,z)
                 grid_dirty = true;
 
                 if self.note_on ~= nil then self.note_on(self, noteNum, self.note_velocity) end
+
+                if self.key_pushed ~= nil then self.key_pushed(self, noteNum, self.note_velocity) end
 
                 self.active_anim_keys[x][y] = 1
                 self.anim_steps[x][y] = 0
