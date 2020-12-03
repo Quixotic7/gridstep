@@ -37,18 +37,9 @@ documentation for **gridstep** can be found [here](doc/README.md).
 
 ### installation
 
-gridstep.lua should be placed in "/home/we/dust/code/gridstep/gridstep.lua"
-the "lib" and "img" subfolders will also need to be placed in that folder
-"/home/we/dust/code/gridstep/lib/"
-"/home/we/dust/code/gridstep/img/"
+Use norns.fetch in Maiden
 
-easiest way to install from ssh is:
-
-```
-cd /home/we/dust/code/
-git clone https://github.com/Quixotic7/gridstep.git
-```
-make sure you have installed Timber from maiden.
+`norns.fetch("https://github.com/Quixotic7/gridstep.git")`
 
 system > reset then launch gridstep
 
