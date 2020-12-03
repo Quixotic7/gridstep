@@ -39,9 +39,21 @@ documentation for **gridstep** can be found [here](doc/README.md).
 
 Use norns.fetch in Maiden
 
-`norns.fetch("https://github.com/Quixotic7/gridstep.git")`
+```lua
+norns.fetch("https://github.com/Quixotic7/gridstep.git")
+```
 
 system > reset then launch gridstep
+
+
+
+to update
+
+```lua
+os.execute("rm -rf ~/dust/code/gridstep")
+norns.fetch("https://github.com/Quixotic7/gridstep.git")
+```
+
 
 ### changelog
 
