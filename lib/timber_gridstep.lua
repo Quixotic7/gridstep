@@ -1445,9 +1445,9 @@ end
 function Timber.UI.Waveform:set_sample_id(id)
   self.sample_id = id
 
-  if not samples_meta[self.sample_id].waveform_requested then
-    Timber.request_waveform(self.sample_id)
-  end
+  -- if not samples_meta[self.sample_id].waveform_requested then
+  --   Timber.request_waveform(self.sample_id)
+  -- end
 
   Timber.views_changed_callback(id)
 end

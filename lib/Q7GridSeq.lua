@@ -60,6 +60,7 @@ function Q7GridSeq.new(gridKeys)
 
     seq.last_16th_time = 0 -- last 16th in beat time
     seq.last_16th_index = 1
+    seq.last_play_bar_position = 1
     -- seq.time_between_16ths = 1
 
     seq.elapsed_steps = 1 -- how much time in step space has elapsed since playback started
@@ -70,6 +71,8 @@ function Q7GridSeq.new(gridKeys)
     seq.play_clock_id = 0
     seq.step_edit = false
     seq.record = false
+    seq.record_quantize = true
+    
     seq.prev_trig_true = false
     seq.pattern_count = 0 -- how many times pattern has looped
 
@@ -133,6 +136,7 @@ function Q7GridSeq:play_start()
 
     self.last_16th_time = clock.get_beats()
     self.last_16th_index = 1
+    self.last_play_bar_position = 1
     self.play_bar_position = 1
     self.active_pattern = self.selected_pattern
     self.is_playing = true
@@ -474,6 +478,7 @@ function Q7GridSeq:clock_step16()
         self.sub_steps2 = {}
         self.last_16th_index = stepIndex
         self.last_16th_time = clock.get_beats()
+        self.last_play_bar_position = self.play_bar_position
 
         local pat = self:get_active_pattern()
         if pat ~= nil then 
@@ -1630,24 +1635,45 @@ function Q7GridSeq:key_on(e)
             -- e.record_bar = self.play_bar_position
             -- e.record_offset = self.sub_step_counter
 
+            -- if self.record_quantize then
+            --     e.record_start = self.last_16th_index
+            --     e.record_bar = self.last_play_bar_position
+            --     e.record_offset = self.sub_step_counter
+            -- else
+                
+            -- end
 
-            if self.sub_step_counter <= substep_count / 2 then
+            -- e.record_start = self.last_16th_index + 1
+            -- e.record_bar = self.last_play_bar_position
+            
+            -- e.record_offset = 0 - (substep_count - self.sub_step_counter)
+
+            -- if e.record_start > pat.bar_length then
+            --     e.record_start = 1
+            --     e.record_bar = (self.last_play_bar_position % pat.num_bars) + 1
+            -- end
+
+            -- e.record_start = self.position + 1
+            -- e.record_bar = self.play_bar_position
+            -- e.record_offset = self.sub_step_counter
+
+            if self.sub_step_counter < substep_count / 2 then
                 e.record_start = self.last_16th_index
-                e.record_bar = self.play_bar_position
+                e.record_bar = self.last_play_bar_position
                 e.record_offset = self.sub_step_counter
             else
                 e.record_start = self.last_16th_index + 1
-                e.record_bar = self.play_bar_position
+                e.record_bar = self.last_play_bar_position
                 
                 e.record_offset = 0 - (substep_count - self.sub_step_counter)
 
                 if e.record_start > pat.bar_length then
                     e.record_start = 1
-                    e.record_bar = (self.play_bar_position % pat.num_bars) + 1
+                    e.record_bar = (self.last_play_bar_position % pat.num_bars) + 1
                 end
             end
 
-            print("Record_start "..e.record_start.." bar "..e.record_bar.." Record offset "..e.record_offset)
+            -- print("Record_start "..e.record_start.." bar "..e.record_bar.." Record offset "..e.record_offset)
 
 
             -- if clock.get_beats() < (self.last_16th_time + 0.1875) then
@@ -1703,7 +1729,9 @@ function Q7GridSeq:key_off(e)
 
                 if self:does_step_have_notes_internal(step) == false then
                     pat.bars[record_note.record_bar][record_note.record_start].length = record_note.note_length
-                    pat.bars[record_note.record_bar][record_note.record_start].offset = record_note.record_offset
+                    pat.bars[record_note.record_bar][record_note.record_start].offset = self.record_quantize and 0 or record_note.record_offset
+                else
+                    pat.bars[record_note.record_bar][record_note.record_start].length = math.max(record_note.note_length, pat.bars[record_note.record_bar][record_note.record_start].length)
                 end
 
                 pat.bars[record_note.record_bar][record_note.record_start].keys[e.id] = record_note
