@@ -28,7 +28,7 @@ TimberUI.amp_mod_env_view = {}
 TimberUI.lfos_view = {}
 TimberUI.mod_matrix_view = {}
 TimberUI.key_matrix_view = {}
-TimberUI.page_start = 6
+TimberUI.page_start = 7
 TimberUI.pages = {}
 
 TIMBER_QUANTIZATION = {"None", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "1 bar"}
@@ -75,7 +75,7 @@ local GraphicPageOptions = include("gridstep/lib/Q7GraphicPageOptions")
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.3.3"
+local version_number = "1.3.4"
 
 local g = grid.connect()
 
