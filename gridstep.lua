@@ -75,7 +75,7 @@ local GraphicPageOptions = include("gridstep/lib/Q7GraphicPageOptions")
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.3.2"
+local version_number = "1.3.3"
 
 local g = grid.connect()
 
@@ -139,6 +139,7 @@ local PageSound = {}
 local PageKit = {}
 local PageTimber = {}
 local PageTrack = {}
+local PagePattern = {}
 local PageClock = {}
 local PageSaveLoad = {}
 local PageQ7 = {}
@@ -149,7 +150,7 @@ local showTrigPage = false
 
 local current_page = {}
 
-local pages = {PageSaveLoad, PageScale, PageClock, PageTrig, PageKit, PageTimber, PageTimber, PageTimber, PageTimber, PageTimber, PageTimber, PageTimber, PageSound, PageTrack, PageMicroTiming, PageQ7}
+local pages = {PageSaveLoad, PageScale, PageClock, PageTrig, PageKit, PagePattern, PageTimber, PageTimber, PageTimber, PageTimber, PageTimber, PageTimber, PageTimber, PageSound, PageTrack, PageMicroTiming, PageQ7}
 -- local page_titles = {"Scale", "Sample", "Waveform", "Filter Amp", "Env", "LFOS", "Mod Matrix", "Key Matrix",
 --  "Sound",  "Kit", "Clock", "Track", "Trig", "Step Time", "Save / Load", "Credits"}
 
@@ -351,8 +352,8 @@ function init()
 
 
         all_gridSeqs[i] = Q7GridSeq.new(all_gridKeys[i])
-
         all_gridKeys[i].gridSeq = all_gridSeqs[i]
+        all_gridSeqs[i].on_pat_changed = gridSeq_pat_changed
         -- all_gridSeqs[i].on_new_step = seq_newStep
     end
 
@@ -495,6 +496,7 @@ function create_new_project()
         all_gridSeqs[i] = Q7GridSeq.new(all_gridKeys[i])
 
         all_gridKeys[i].gridSeq = all_gridSeqs[i]
+        all_gridSeqs[i].on_pat_changed = gridSeq_pat_changed
         -- all_gridSeqs[i].on_new_step = seq_newStep
     end
 
@@ -668,9 +670,16 @@ function toggle_playback()
         clock.transport.stop()
         all_midi_notes_off()
         show_temporary_notification("Stop")
+
+        for i = 1, #midi_devices do
+            midi_devices[i]:stop()
+        end
     else
         clock.transport.start()
         show_temporary_notification("Play")
+        for i = 1, #midi_devices do
+            midi_devices[i]:start()
+        end
     end
 end
 
@@ -974,6 +983,21 @@ function grid_key_pushed(gKeys, noteNum, vel)
     end
 end
 
+function gridSeq_pat_changed(gSeq, gKeys, newPatern)
+    if gKeys.sound_mode == 2 and newPatern.launch_event ~= 1 then
+        if newPatern.launch_event == 2 then
+            midi_devices[gKeys.midi_device]:program_change(newPatern.launch_value, newPatern.launch_midi_channel)
+        elseif newPatern.launch_event == 3 then
+            midi_devices[gKeys.midi_device]:note_on(newPatern.launch_value, 127, newPatern.launch_midi_channel)
+
+            clock.run(function(dId, v, c)
+                clock.sleep(0.25)
+                midi_devices[dId]:note_off(v, 0, c)
+            end, gKeys.midi_device, newPatern.launch_value, newPatern.launch_midi_channel)
+        end
+    end
+end
+
 function grid_note_on(gKeys, noteNum, vel)
     vel = vel or 100 
     -- print("Note On: " .. noteNum.. " " .. vel .. " " .. music.note_num_to_name(noteNum))
@@ -1111,11 +1135,11 @@ function all_midi_notes_off(deviceId)
 
         if m ~= nil then
             for c = 1,16 do
-                for i,n in pairs(active_midi_notes[d][c]) do
+                for i,n in pairs(active_midi_notes[deviceId][c]) do
                     m:note_off(n.noteNum, 0, c)
                 end
 
-                active_midi_notes[d][c] = {}
+                active_midi_notes[deviceId][c] = {}
             end
         end
     end
@@ -2144,6 +2168,10 @@ function GridPatLaunch.grid_key(x,y,z)
                 change_track(x+xOff)
                 all_gridSeqs[x+xOff]:change_selected_pattern(patIndex)
                 show_temporary_notification("Pattern "..get_pattern_letter(all_gridSeqs[x].selected_pattern))
+
+                -- if all_gridKeys[x+xOff].sound_mode == 2 then
+                --     midi_devices[all_gridKeys[x+xOff].midi_device]:program_change(patIndex, 10)
+                -- end
 
                 GridPatLaunch.heldPattern = {}
                 GridPatLaunch.heldPattern.x = x+xOff
@@ -4128,6 +4156,78 @@ end
 function PageClock.redraw()
     PageClock.paramUtil:redraw()
 end
+
+PagePattern.paramUtil = {}
+
+function PagePattern.get_title()
+    return "Pattern "..track..get_pattern_letter(gridSeq.selected_pattern)
+end
+
+function PagePattern.init()
+    PagePattern.paramUtil = ParamListUtil.new()
+    PagePattern.paramUtil.start_y = 20
+    PagePattern.paramUtil.display_num = 3
+    PagePattern.paramUtil.scroll_offset = 1
+
+    PagePattern.paramUtil:add_option("Launch Event",
+        function() 
+            local event_type = gridSeq:get_selected_pattern().launch_event
+            
+            return Q7GridSeq.PAT_LAUNCH_EVENTS[event_type]
+        end,
+        function(d,d_raw) 
+            local pat = gridSeq:get_selected_pattern()
+            pat.launch_event = util.clamp(pat.launch_event + d, 1, #Q7GridSeq.PAT_LAUNCH_EVENTS)
+        end
+    )
+
+    PagePattern.paramUtil:add_option("Value",
+        function() 
+            return gridSeq:get_selected_pattern().launch_value
+        end,
+        function(d,d_raw) 
+            local pat = gridSeq:get_selected_pattern()
+            pat.launch_value = util.clamp(pat.launch_value + d_raw, 0, 127)
+        end
+    )
+
+    PagePattern.paramUtil:add_option("Midi Channel",
+        function() 
+            return gridSeq:get_selected_pattern().launch_midi_channel
+        end,
+        function(d,d_raw) 
+            local pat = gridSeq:get_selected_pattern()
+            pat.launch_midi_channel = util.clamp(pat.launch_midi_channel + d, 1, 16)
+        end
+    )
+
+    -- PagePattern.paramUtil:add_option("BPM",
+    --     function() return params:string("clock_tempo") end,
+    --     function(d,d_raw) 
+    --         params:delta("clock_tempo", d_raw)
+    --         on_tempo_changed(clock.get_tempo())
+    --         -- hsdelay.tempo_changed(clock.get_tempo())
+    --     end
+    -- )
+
+end
+
+function PagePattern.key(n,z)
+    PagePattern.paramUtil:key(n,z)
+end
+function PagePattern.enc(n,d)
+    PagePattern.paramUtil:enc(n,d)
+end
+function PagePattern.redraw()
+
+    screen.level(15)
+    screen.move(64,24)
+    screen.text_center("Events sent for midi tracks")
+
+    PagePattern.paramUtil:redraw()
+end
+
+
 
 
 PageTrig.paramUtil = {}

@@ -8,6 +8,8 @@ Q7GridSeq.__index = Q7GridSeq
 
 Q7GridSeq.gridKeys = {}
 
+Q7GridSeq.PAT_LAUNCH_EVENTS = {"Disabled", "Prog Change", "Send Note"}
+
 Q7GridSeq.trigConditions = {"Percent", "Pre", "!Pre","First","!First", 
 "1:2", "2:2", 
 "1:3", "2:3", "3:3", 
@@ -41,6 +43,7 @@ function Q7GridSeq.new(gridKeys)
 
     seq.gridKeys = gridKeys
     seq.on_new_step = nil
+    seq.on_pat_changed = nil
 
     seq.current_step = 1 -- step that is currently selected for editing
     -- 1 x x x 2 x x x 3 x x x
@@ -250,6 +253,10 @@ function Q7GridSeq:create_new_pattern(barLength, numBars)
     pattern.num_bars = numBars
     pattern.triplet_mode = false
 
+    pattern.launch_event = 1 -- 1 = do nothing, 2 = send program change, 3 send note
+    pattern.launch_value = 0
+    pattern.launch_midi_channel = 10
+
     for bar = 1, pattern.num_bars do
         pattern.bars[bar] = self:create_new_bar()
     end
@@ -265,6 +272,16 @@ function Q7GridSeq:clone_pattern(pat)
     clonedPat.bar_length = pat.bar_length
     clonedPat.num_bars = pat.num_bars
     clonedPat.triplet_mode = pat.triplet_mode
+
+    if pat.launch_event == nil then
+        clonedPat.launch_event = 1 -- 1 = do nothing, 2 = send program change, 3 send note
+        clonedPat.launch_value = 0
+        clonedPat.launch_midi_channel = 10
+    else
+        clonedPat.launch_event = pat.launch_event
+        clonedPat.launch_value = pat.launch_value
+        clonedPat.launch_midi_channel = pat.launch_midi_channel
+    end
     
     clonedPat.bars = {}
 
@@ -296,6 +313,12 @@ function Q7GridSeq:change_selected_pattern(newPatIndex)
     self.total_step_count = self.bar_length * self.num_bars
 
     self:change_selected_bar(1) -- will update active bar and step
+
+    -- if is_playing == false then
+        
+    -- end
+
+    if self.on_pat_changed ~= nil then self.on_pat_changed(self, self.gridKeys, self:get_selected_pattern()) end
 
     return true
 end

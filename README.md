@@ -57,6 +57,8 @@ norns.fetch("https://github.com/Quixotic7/gridstep.git")
 
 ### changelog
 
+**1.3.3** - Added feature to send midi program change or note when changing the pattern for midi tracks. To configure, select a pattern from the pattern launch grid view, then find the pattern page on the norns screen. Set the "Launch Event" to "Disabled", "Prog Change", or "Send Note". The value can be between 0-127 and determines the note or prog change midi message that is sent. Midi Channel can also be set. The midi event will be sent whenever you press a key in the pattern launch grid view to select a new pattern. https://www.youtube.com/watch?v=DlUwQmZqUnM
+
 **1.3.1** - Added Timber UI! Select sample by changing track. If track's sound source is set to kit, select the sample by pressing a grid key. Loading a folder of samples for a kit now sets all samples to one-shot unless "loop" is in the name of the sample. 
 
 **1.2.4** - Experimental support added for loading kits. Go to kit page, select "load kit" using  K3, then select a sample, the entire folder will be loaded and the active track's sound source will change to kit. Use the new layout mode to map all the sounds across the grid. Samples can be adjusted in params menu, kit samples start at 16 and sample 16 maps to kit sample 1/C0, sample 17 kit sample 2/C#, etc...
