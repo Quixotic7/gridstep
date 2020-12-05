@@ -5,7 +5,7 @@
 -- for timber & midi
 -- llllllll.co/t/38559
 
-local version_number = "1.3.41"
+local version_number = "1.3.5"
 
 local _MOLLY_ENGINE = false
 local _TIMBER_ENGINE = true
@@ -402,6 +402,14 @@ function init()
         gk.layout_mode = 2
     end
 
+
+    -- for i = 1,#midi_devices do
+    --     midi_devices[i].event = function (data)
+
+            
+    --     end
+    -- end
+
     -- local note = gridKeys:grid_to_note(10,4)
     -- print("note = "..note)
 
@@ -745,6 +753,8 @@ function play_sequence()
     -- might want to do this every step, we'll see
 
     while is_playing do
+
+        clock.sync(1/48) -- 6 substeps
         -- print("beats: " .. clock.get_beats())
 
         -- self:clock_step16()
@@ -759,7 +769,7 @@ function play_sequence()
 
         active_internal_notes = {} -- prevents notes from playing on top of each other in a step
 
-        clock.sync(1/48) -- 6 substeps
+        
         -- clock.sync(1/48) -- 12 substeps
 
         -- grid_redraw()
