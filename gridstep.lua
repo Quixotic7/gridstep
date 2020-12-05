@@ -5,7 +5,7 @@
 -- for timber & midi
 -- llllllll.co/t/38559
 
-local version_number = "1.3.4"
+local version_number = "1.3.41"
 
 local _MOLLY_ENGINE = false
 local _TIMBER_ENGINE = true
