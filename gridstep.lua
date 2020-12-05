@@ -1,7 +1,11 @@
 -- gridstep
---
+-- v1.3.4 @Quixotic7
 -- a polyphonic, isomorphic 
 -- grid keyboard sequencer
+-- for timber & midi
+-- llllllll.co/t/38559
+
+local version_number = "1.3.4"
 
 local _MOLLY_ENGINE = false
 local _TIMBER_ENGINE = true
@@ -75,7 +79,7 @@ local GraphicPageOptions = include("gridstep/lib/Q7GraphicPageOptions")
 local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
-local version_number = "1.3.4"
+
 
 local g = grid.connect()
 
