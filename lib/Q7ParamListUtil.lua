@@ -64,7 +64,7 @@ function ParamListUtil:enc(n,d)
 
     if n == 2 then
         local prevSelection = self.selection
-        self.selection_d, self.selection = Q7Util.enc_delta_slow(d, self.selection_d, 1, #self.options)
+        self.selection_d, self.selection = Q7Util.enc_delta_slow(d, self.selection_d, 1, #self.options, self.delta_speed)
 
         if prevSelection ~= self.selection then
             self.enc3_d = 0
