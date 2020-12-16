@@ -38,7 +38,7 @@ function sc.init()
 	softcut.filter_bp(1, 1.0);
 	softcut.filter_rq(1, 2.0);
 
-	params:add_separator("Delay")
+	params:add_group("Delay", 6)
 
 	params:add{type = "option", id = "delay_enabled", name = "delay enabled", options = {"off", "on"}, default = 1, 
 		action = function(value)
