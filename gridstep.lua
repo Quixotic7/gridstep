@@ -299,7 +299,7 @@ function init()
         params:add_separator()
         for i = 0, NUM_SAMPLES - 1 do
             Timber.add_sample_params(i)
-            Timber.load_sample(i, _path.code .. "/timber/audio/piano-c.wav")
+            Timber.load_sample(i, _path.code .. "/gridstep/audio/piano-c.wav")
         end
 
         for i = KIT_SAMPLES_START, KIT_SAMPLES_END do
