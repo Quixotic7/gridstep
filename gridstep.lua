@@ -81,6 +81,7 @@ local textentry = require 'textentry'
 
 
 
+local grid = util.file_exists(_path.code .. "midigrid") and include "midigrid/lib/mg_128" or grid
 local g = grid.connect()
 
 local gridType_none = 0
@@ -212,6 +213,7 @@ local shift_down = false
 local track = 1
 
 local is_playing = false
+local animation = true
 
 local edit_steps_9_16 = false -- for 64x64 grids
 
@@ -691,6 +693,20 @@ function toggle_playback()
         show_temporary_notification("Play")
         for i = 1, #midi_devices do
             midi_devices[i]:start()
+        end
+    end
+end
+
+function toggle_animation()
+    for i, gKey in pairs(all_gridKeys) do
+        if gKey.animation then
+            gKey.animation = false
+            animation = false
+            show_temporary_notification("Animation Off")
+        else
+            gKey.animation = true
+            animation = true
+            show_temporary_notification("Animation On")
         end
     end
 end
@@ -1202,6 +1218,9 @@ function grid_key_toolbar_128( x, y, z)
                         change_grid_page("GridSeq")
                         grid_dirty = true
                     end
+                elseif x == 6 then -- Toggle animation
+                    toggle_animation()
+                    grid_dirty = true
                 end
             end
         else  -- key released
@@ -1234,6 +1253,9 @@ function grid_key_toolbar_64( x, y, z)
                 elseif x == 3 then -- change mode
                     local new_page = (config.grid_page_index % 3) + 1
                     change_grid_page(grid_page_names[new_page])
+                    grid_dirty = true
+                elseif x == 4 then -- Toggle animation
+                    toggle_animation()
                     grid_dirty = true
                 elseif x == 7 then -- edit steps 1-8
                     edit_steps_9_16 = false
@@ -2738,8 +2760,18 @@ function grid_draw_toolbar()
         g:led(3,toolY, config.grid_page_index == 1 and mode_on_brightness or mode_off_brightness) -- play mode active
         g:led(4,toolY, config.grid_page_index == 2 and mode_on_brightness or mode_off_brightness) -- pat launch mode not active
         g:led(5,toolY, config.grid_page_index == 3 and mode_on_brightness or mode_off_brightness) -- step mode not active
+        if animation then
+            g:led(6, toolY, mode_on_brightness) -- animation active
+        else
+            g:led(6, toolY, mode_off_brightness) -- animation inactive
+        end
      elseif gridType == gridType_64 then
         g:led(3,toolY, mode_on_brightness)
+        if animation then
+            g:led(4, toolY, mode_on_brightness) -- animation active
+        else
+            g:led(4, toolY, mode_off_brightness) -- animation inactive
+        end
 
         g:led(7,toolY, edit_steps_9_16 and mode_off_brightness or mode_on_brightness)
         g:led(8,toolY, edit_steps_9_16 and mode_on_brightness or mode_off_brightness)
@@ -3023,9 +3055,19 @@ function grid_draw_param_edit(edit_type)
         g:led(3,toolY,edit_type == 1 and mode_on_brightness or mode_off_brightness)
         g:led(4,toolY,edit_type == 2 and mode_on_brightness or mode_off_brightness)
         g:led(5,toolY,edit_type == 3 and mode_on_brightness or mode_off_brightness)
+        if animation then
+            g:led(6, toolY, mode_on_brightness) -- animation active
+        else
+            g:led(6, toolY, mode_off_brightness) -- animation inactive
+        end
     elseif gridType == gridType_64 then
         g:led(1,toolY,mode_off_brightness)
         g:led(3,toolY,mode_on_brightness)
+        if animation then
+            g:led(4, toolY, mode_on_brightness) -- animation active
+        else
+            g:led(4, toolY, mode_off_brightness) -- animation inactive
+        end
 
         g:led(7,toolY, edit_steps_9_16 and mode_off_brightness or mode_on_brightness)
         g:led(8,toolY, edit_steps_9_16 and mode_on_brightness or mode_off_brightness)

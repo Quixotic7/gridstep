@@ -59,6 +59,7 @@ function Q7GridKeys.new(width,height)
 
     gk.enable_note_highlighting = true
     gk.enable_key_playback = true
+    gk.animation = true
 
     gk.lit_keys = {}
 
@@ -351,15 +352,17 @@ function Q7GridKeys:animate()
 end
 
 function Q7GridKeys:anim_set_leds(step_position, x, y)
-    local pixels = ripple_anim[step_position]
-    local brightness = math.floor(util.linlin(1,8,5,1,step_position))
+    if self.animation then
+        local pixels = ripple_anim[step_position]
+        local brightness = math.floor(util.linlin(1,8,5,1,step_position))
 
-    for i=1,#pixels do
-        local pixel = pixels[i]
-        self:set_anim_grid(x + pixel[1], y + pixel[2], brightness)
-        self:set_anim_grid(x - pixel[1], y + pixel[2], brightness)
-        self:set_anim_grid(x - pixel[1], y - pixel[2], brightness)
-        self:set_anim_grid(x + pixel[1], y - pixel[2], brightness)
+        for i=1,#pixels do
+            local pixel = pixels[i]
+            self:set_anim_grid(x + pixel[1], y + pixel[2], brightness)
+            self:set_anim_grid(x - pixel[1], y + pixel[2], brightness)
+            self:set_anim_grid(x - pixel[1], y - pixel[2], brightness)
+            self:set_anim_grid(x + pixel[1], y - pixel[2], brightness)
+        end
     end
 end
 
