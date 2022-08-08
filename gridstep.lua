@@ -80,7 +80,7 @@ local fileselect = require 'fileselect'
 local textentry = require 'textentry'
 
 
-
+local grid = util.file_exists(_path.code.."midigrid") and include "midigrid/lib/mg_128" or grid
 local g = grid.connect()
 
 local gridType_none = 0
@@ -695,6 +695,18 @@ function toggle_playback()
     end
 end
 
+function toggle_animation()
+    for i, gKey in pairs(all_gridKeys) do
+        if gKey.animation then
+            gKey.animation = false
+            show_temporary_notification("Animation Off")
+        else
+            gKey.animation = true
+            show_temporary_notification("Animation On")
+        end
+    end
+end
+
 function clock.transport.start()
     -- print("we begin")
     -- position = 16
@@ -1202,6 +1214,9 @@ function grid_key_toolbar_128( x, y, z)
                         change_grid_page("GridSeq")
                         grid_dirty = true
                     end
+                elseif x == 6 then -- Toggle animation
+                    toggle_animation()
+                    grid_dirty = true
                 end
             end
         else  -- key released
@@ -1234,6 +1249,9 @@ function grid_key_toolbar_64( x, y, z)
                 elseif x == 3 then -- change mode
                     local new_page = (config.grid_page_index % 3) + 1
                     change_grid_page(grid_page_names[new_page])
+                    grid_dirty = true
+                elseif x == 4 then -- Toggle animation
+                    toggle_animation()
                     grid_dirty = true
                 elseif x == 7 then -- edit steps 1-8
                     edit_steps_9_16 = false
